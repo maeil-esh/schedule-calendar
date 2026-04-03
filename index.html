@@ -915,27 +915,27 @@ function buildGrid(year,month,bodyEl){
           titleSpan.style.cssText='overflow:hidden;text-overflow:ellipsis;flex-shrink:1';
           bar.appendChild(titleSpan);
 
-          // 심사원 표시 (안전 / 환경)
-          const safeArr=toArr(e.auditorSafe);
-          const envArr=toArr(e.auditorEnv);
-          if(safeArr.length||envArr.length){
+          // 심사원 표시
+          const _safe=toArr(e.auditorSafe);
+          const _env=toArr(e.auditorEnv);
+          if(_safe.length||_env.length){
             const audSpan=document.createElement('span');
             audSpan.style.cssText='font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;margin-left:4px;background:rgba(0,0,0,.18);border-radius:3px;padding:1px 4px';
             const parts=[];
-            if(safeArr.length) parts.push('안전:'+safeArr.join('·'));
-            if(envArr.length) parts.push('환경:'+envArr.join('·'));
+            if(_safe.length) parts.push('안전:'+_safe.join('·'));
+            if(_env.length) parts.push('환경:'+_env.join('·'));
             audSpan.textContent=parts.join(' / ');
             bar.appendChild(audSpan);
           }
         }
 
-        // 툴팁: 제목 + 사업장 + 심사원 전체
-        const safeArr=toArr(e.auditorSafe);
-        const envArr=toArr(e.auditorEnv);
+        // 툴팁
+        const _tipSafe=toArr(e.auditorSafe);
+        const _tipEnv=toArr(e.auditorEnv);
         let tipText=e.title;
         if(toArr(e.sites).length) tipText+=` [${toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`;
-        if(safeArr.length) tipText+=`\n안전: ${safeArr.join(', ')}`;
-        if(envArr.length) tipText+=`\n환경: ${envArr.join(', ')}`;
+        if(_tipSafe.length) tipText+=`\n안전: ${_tipSafe.join(', ')}`;
+        if(_tipEnv.length) tipText+=`\n환경: ${_tipEnv.join(', ')}`;
         bar.title=tipText;
         bar.addEventListener('click',ev=>{ev.stopPropagation();openEdit(e.id)});
         evWrap.appendChild(bar);
