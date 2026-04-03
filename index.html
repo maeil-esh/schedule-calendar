@@ -261,11 +261,39 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 <div class="toast" id="toast"></div>
 
 <script>
-// ── STORAGE ──
+// ── GOOGLE SHEETS API 설정 ──
+// Apps Script 배포 후 아래 URL을 교체하세요
+const API_URL = 'https://script.google.com/macros/s/AKfycbw0ndx12wgUZTNxB5P0icuWEwQgxbas5TDqW_A3QhoZNrNOruLM55F3uxWFpDYU4iCg/exec';
+const USE_SHEETS = API_URL !== 'YOUR_APPS_SCRIPT_URL';
+
+// ── LOCAL FALLBACK STORAGE ──
 const S={
   get(k){try{return localStorage.getItem(k)}catch{return null}},
   set(k,v){try{localStorage.setItem(k,v)}catch{}}
 };
+
+// ── API 함수 ──
+async function apiGet(){
+  const res=await fetch(API_URL+'?action=getAll');
+  return res.json();
+}
+async function apiPost(action,payload){
+  await fetch(API_URL,{
+    method:'POST',
+    body:JSON.stringify({action,...payload})
+  });
+}
+
+// ── 로딩 표시 ──
+function showLoading(show){
+  let el=document.getElementById('loadingBar');
+  if(!el){
+    el=document.createElement('div');el.id='loadingBar';
+    el.style.cssText='position:fixed;top:0;left:0;width:100%;height:3px;background:var(--accent);z-index:9999;transition:opacity .3s';
+    document.body.appendChild(el);
+  }
+  el.style.opacity=show?'1':'0';
+}
 
 // ── HOLIDAYS ──
 const HOL={'2026-01-01':'신정','2026-01-28':'설날','2026-01-29':'설날','2026-01-30':'설날','2026-03-01':'삼일절','2026-05-01':'노동절','2026-05-05':'어린이날','2026-05-25':'부처님오신날','2026-06-06':'현충일','2026-08-15':'광복절','2026-09-24':'추석','2026-09-25':'추석','2026-09-26':'추석','2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'크리스마스'};
@@ -283,7 +311,10 @@ const DCATS=[
   {id:'cat-etc',label:'기타',dot:'#6d28d9'},
 ];
 let CATS=(()=>{try{const s=S.get('cal_cats');return s?JSON.parse(s):DCATS}catch{return DCATS}})();
-function saveCats(){S.set('cal_cats',JSON.stringify(CATS))}
+function saveCats(){
+  S.set('cal_cats',JSON.stringify(CATS)); // 로컬 캐시
+  if(USE_SHEETS) apiPost('saveCats',{data:CATS.filter(c=>!c.fixed)});
+}
 
 // ── SITES (사업장) ──
 const DSITES=[
@@ -297,7 +328,10 @@ const DSITES=[
   {id:'site-sh',label:'상하',dot:'#15803d'},
 ];
 let SITES=(()=>{try{const s=S.get('cal_sites');return s?JSON.parse(s):DSITES}catch{return DSITES}})();
-function saveSites(){S.set('cal_sites',JSON.stringify(SITES))}
+function saveSites(){
+  S.set('cal_sites',JSON.stringify(SITES));
+  if(USE_SHEETS) apiPost('saveSites',{data:SITES.filter(s=>!s.fixed)});
+}
 
 // ── EVENTS ──
 const DEVTS=[
@@ -311,7 +345,10 @@ const DEVTS=[
   {id:'e8',title:'상하 교육',cat:'cat-edu',sites:['site-sh'],start:'2026-05-19',end:'2026-05-21',note:''},
 ];
 let EVTS=(()=>{try{const s=S.get('cal_evts');return s?JSON.parse(s):DEVTS}catch{return DEVTS}})();
-function saveEvts(){S.set('cal_evts',JSON.stringify(EVTS))}
+function saveEvts(){
+  S.set('cal_evts',JSON.stringify(EVTS));
+  if(USE_SHEETS) apiPost('saveEvts',{data:EVTS});
+}
 
 // ── STATE ──
 const TODAY=new Date();
@@ -401,12 +438,12 @@ function closeSettings(){
   renderAll();
 }
 function applySettings(){
-  // 제목 저장
   const v=document.getElementById('titleInput').value.trim();
   if(v){
     document.getElementById('logoTitle').textContent=v;
     document.title=v;
     S.set('cal_title',v);
+    if(USE_SHEETS) apiPost('saveTitle',{value:v});
   }
   closeSettings();
   toast('기준정보가 저장되었습니다.');
@@ -819,7 +856,8 @@ function renderAll(){
 }
 
 // ── INIT ──
-(function(){
+async function init(){
+  // URL 파라미터 공유 데이터 처리
   try{
     const p=new URLSearchParams(location.search).get('data');
     if(p){
@@ -830,9 +868,43 @@ function renderAll(){
       saveEvts();saveCats();saveSites();
     }
   }catch{}
-  const t=S.get('cal_title');if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
+
+  if(USE_SHEETS){
+    // Google Sheets에서 최신 데이터 로드
+    showLoading(true);
+    try{
+      const d=await apiGet();
+      if(d.evts&&d.evts.length>=0){
+        EVTS=d.evts;
+        S.set('cal_evts',JSON.stringify(EVTS));
+      }
+      if(d.cats&&d.cats.length>0){
+        CATS=[DCATS[0],...d.cats]; // '전체' 고정항목 + Sheets 데이터
+        S.set('cal_cats',JSON.stringify(CATS));
+      }
+      if(d.sites&&d.sites.length>0){
+        SITES=[DSITES[0],...d.sites];
+        S.set('cal_sites',JSON.stringify(SITES));
+      }
+      if(d.title){
+        document.getElementById('logoTitle').textContent=d.title;
+        document.title=d.title;
+        S.set('cal_title',d.title);
+      }
+    }catch(err){
+      toast('⚠️ 서버 연결 실패 - 로컬 데이터로 표시합니다.');
+      console.error(err);
+    }
+    showLoading(false);
+  } else {
+    // localStorage 모드
+    const t=S.get('cal_title');
+    if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
+  }
+
   renderAll();
-})();
+}
+init();
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();closeSettings();closeDetail()}
