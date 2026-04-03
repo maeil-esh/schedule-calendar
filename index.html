@@ -664,12 +664,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">카테고리</label>
-      <div class="cat-select-group">
-        <div class="cat-option cat-blue selected" data-cat="cat-blue" onclick="selectCat(this)">🔵 점검</div>
-        <div class="cat-option cat-green" data-cat="cat-green" onclick="selectCat(this)">🟢 교육</div>
-        <div class="cat-option cat-orange" data-cat="cat-orange" onclick="selectCat(this)">🟠 회의</div>
-        <div class="cat-option cat-purple" data-cat="cat-purple" onclick="selectCat(this)">🟣 기타</div>
-      </div>
+      <div class="cat-select-group" id="modalCatGroup"></div>
     </div>
     <div class="form-row form-group">
       <div>
@@ -741,14 +736,25 @@ const holidays = {
   '2026-12-25': '크리스마스',
 };
 
-// 카테고리 정의
-const CATEGORIES = [
-  { id: 'all', label: '전체 일정', dot: '#7a8394' },
-  { id: 'cat-blue', label: '점검', dot: '#1e6fb5' },
-  { id: 'cat-green', label: '교육', dot: '#1a7a4a' },
-  { id: 'cat-orange', label: '회의', dot: '#c2570a' },
-  { id: 'cat-purple', label: '기타', dot: '#6d28d9' },
+// 카테고리 정의 (동적 관리)
+const DEFAULT_CATEGORIES = [
+  { id: 'all',        label: '전체 일정', dot: '#7a8394', fixed: true },
+  { id: 'cat-blue',   label: '점검',     dot: '#1e6fb5' },
+  { id: 'cat-green',  label: '교육',     dot: '#1a7a4a' },
+  { id: 'cat-orange', label: '회의',     dot: '#c2570a' },
+  { id: 'cat-purple', label: '기타',     dot: '#6d28d9' },
 ];
+
+let CATEGORIES = (() => {
+  try {
+    const saved = store.get('cal_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  } catch(e) { return DEFAULT_CATEGORIES; }
+})();
+
+function saveCategories() {
+  store.set('cal_categories', JSON.stringify(CATEGORIES));
+}
 
 let activeFilter = 'all';
 
@@ -802,20 +808,99 @@ function showToast(msg) {
 function renderSidebarCats() {
   const list = document.getElementById('catList');
   list.innerHTML = '';
+
   CATEGORIES.forEach(cat => {
     const count = cat.id === 'all'
       ? events.length
       : events.filter(e => e.cat === cat.id).length;
+
     const item = document.createElement('div');
     item.className = 'category-item' + (activeFilter === cat.id ? ' active' : '');
-    item.innerHTML = `
-      <div class="cat-dot" style="background:${cat.dot}"></div>
-      <span>${cat.label}</span>
-      <span class="count">${count}</span>
-    `;
-    item.onclick = () => { activeFilter = cat.id; renderAll(); };
+    item.style.position = 'relative';
+
+    if (cat.fixed) {
+      // 전체 일정 - 편집 불가
+      item.innerHTML = `
+        <div class="cat-dot" style="background:${cat.dot}"></div>
+        <span>${cat.label}</span>
+        <span class="count">${count}</span>
+      `;
+      item.onclick = () => { activeFilter = cat.id; renderAll(); };
+    } else {
+      item.innerHTML = `
+        <div class="cat-dot" style="background:${cat.dot};cursor:pointer" title="색상 변경" onclick="event.stopPropagation();changeCatColor('${cat.id}')"></div>
+        <span class="cat-label-text" id="catLabel_${cat.id}" style="flex:1;cursor:text" title="클릭하여 이름 변경" onclick="event.stopPropagation();startEditCatLabel('${cat.id}')">${cat.label}</span>
+        <input class="cat-label-input" id="catInput_${cat.id}" type="text" maxlength="10" value="${cat.label}"
+          style="display:none;flex:1;font-size:12px;font-weight:500;border:none;border-bottom:1.5px solid #1a56db;outline:none;background:transparent;font-family:inherit;padding:0;width:60px"
+          onblur="finishEditCatLabel('${cat.id}')"
+          onkeydown="if(event.key==='Enter')finishEditCatLabel('${cat.id}');if(event.key==='Escape')cancelEditCatLabel('${cat.id}')"
+          onclick="event.stopPropagation()">
+        <span class="count">${count}</span>
+        ${count === 0 ? `<button onclick="event.stopPropagation();deleteCat('${cat.id}')" title="삭제" style="background:none;border:none;cursor:pointer;color:#c9cdd6;font-size:13px;padding:0 0 0 4px;line-height:1" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#c9cdd6'">✕</button>` : ''}
+      `;
+      item.onclick = () => { activeFilter = cat.id; renderAll(); };
+    }
     list.appendChild(item);
   });
+
+  // 카테고리 추가 버튼
+  const addRow = document.createElement('div');
+  addRow.style.cssText = 'padding:6px 8px;margin-top:4px';
+  addRow.innerHTML = `
+    <button onclick="addCategory()" style="background:none;border:1px dashed #c9cdd6;border-radius:6px;cursor:pointer;font-size:12px;color:#7a8394;padding:5px 10px;width:100%;font-family:inherit;transition:all 0.12s" onmouseenter="this.style.borderColor='#1a56db';this.style.color='#1a56db'" onmouseleave="this.style.borderColor='#c9cdd6';this.style.color='#7a8394'">+ 카테고리 추가</button>
+  `;
+  list.appendChild(addRow);
+}
+
+function startEditCatLabel(id) {
+  document.getElementById('catLabel_' + id).style.display = 'none';
+  const input = document.getElementById('catInput_' + id);
+  input.style.display = '';
+  input.focus();
+  input.select();
+}
+function finishEditCatLabel(id) {
+  const input = document.getElementById('catInput_' + id);
+  const val = input.value.trim();
+  if (val) {
+    const cat = CATEGORIES.find(c => c.id === id);
+    if (cat) { cat.label = val; saveCategories(); }
+  }
+  renderAll();
+}
+function cancelEditCatLabel(id) {
+  const cat = CATEGORIES.find(c => c.id === id);
+  document.getElementById('catInput_' + id).value = cat ? cat.label : '';
+  renderAll();
+}
+
+const CAT_COLORS = ['#1e6fb5','#1a7a4a','#c2570a','#6d28d9','#b91c1c','#0e7490','#4f46e5','#be185d','#065f46'];
+function changeCatColor(id) {
+  const cat = CATEGORIES.find(c => c.id === id);
+  if (!cat) return;
+  const idx = CAT_COLORS.indexOf(cat.dot);
+  cat.dot = CAT_COLORS[(idx + 1) % CAT_COLORS.length];
+  saveCategories();
+  renderAll();
+}
+
+function addCategory() {
+  const existIds = ['cat-blue','cat-green','cat-orange','cat-purple','cat-red','cat-teal','cat-indigo','cat-pink','cat-emerald'];
+  const used = CATEGORIES.map(c => c.id);
+  const newId = existIds.find(i => !used.includes(i)) || ('cat-' + uid());
+  const colorIdx = (CATEGORIES.length - 1) % CAT_COLORS.length;
+  CATEGORIES.push({ id: newId, label: '새 카테고리', dot: CAT_COLORS[colorIdx] });
+  saveCategories();
+  renderAll();
+  // 자동으로 편집 모드
+  setTimeout(() => startEditCatLabel(newId), 50);
+}
+
+function deleteCat(id) {
+  CATEGORIES = CATEGORIES.filter(c => c.id !== id);
+  saveCategories();
+  if (activeFilter === id) activeFilter = 'all';
+  renderAll();
 }
 
 // ─────────────── MINI CALENDAR ───────────────
@@ -1091,17 +1176,32 @@ document.addEventListener('click', (e) => {
 });
 
 // ─────────────── MODAL ───────────────
+function renderModalCats() {
+  const group = document.getElementById('modalCatGroup');
+  if (!group) return;
+  group.innerHTML = '';
+  CATEGORIES.filter(c => !c.fixed).forEach(cat => {
+    const el = document.createElement('div');
+    el.className = 'cat-option' + (selectedCat === cat.id ? ' selected' : '');
+    el.dataset.cat = cat.id;
+    el.style.cssText = `color:${cat.dot};border-color:${selectedCat === cat.id ? cat.dot : '#e2e6eb'};background:${selectedCat === cat.id ? cat.dot + '22' : ''}`;
+    el.textContent = cat.label;
+    el.onclick = () => selectCat(el);
+    group.appendChild(el);
+  });
+}
+
 function openAddModal(date) {
   editingId = null;
   document.getElementById('modalTitle').textContent = '일정 추가';
   document.getElementById('deleteBtn').style.display = 'none';
   document.getElementById('evtTitle').value = '';
   document.getElementById('evtNote').value = '';
-
   const d = date || fmtDate(curYear, curMonth, today.getDate());
   document.getElementById('evtStart').value = d;
   document.getElementById('evtEnd').value = d;
-  selectCatById('cat-blue');
+  selectedCat = CATEGORIES.find(c => !c.fixed)?.id || 'cat-blue';
+  renderModalCats();
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(() => document.getElementById('evtTitle').focus(), 100);
 }
@@ -1109,13 +1209,14 @@ function openEditModal(id) {
   const e = events.find(x => x.id === id);
   if (!e) return;
   editingId = id;
+  selectedCat = e.cat;
   document.getElementById('modalTitle').textContent = '일정 수정';
   document.getElementById('deleteBtn').style.display = '';
   document.getElementById('evtTitle').value = e.title;
   document.getElementById('evtNote').value = e.note || '';
   document.getElementById('evtStart').value = e.start;
   document.getElementById('evtEnd').value = e.end;
-  selectCatById(e.cat);
+  renderModalCats();
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(ev) {
@@ -1125,15 +1226,19 @@ function closeModalForce() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
 function selectCat(el) {
-  document.querySelectorAll('.cat-option').forEach(o => o.classList.remove('selected'));
-  el.classList.add('selected');
   selectedCat = el.dataset.cat;
+  const cat = CATEGORIES.find(c => c.id === selectedCat);
+  document.querySelectorAll('#modalCatGroup .cat-option').forEach(o => {
+    const oCat = CATEGORIES.find(c => c.id === o.dataset.cat);
+    const isSelected = o.dataset.cat === selectedCat;
+    o.classList.toggle('selected', isSelected);
+    o.style.borderColor = isSelected && oCat ? oCat.dot : '#e2e6eb';
+    o.style.background = isSelected && oCat ? oCat.dot + '22' : '';
+  });
 }
 function selectCatById(id) {
-  document.querySelectorAll('.cat-option').forEach(o => {
-    o.classList.toggle('selected', o.dataset.cat === id);
-  });
   selectedCat = id;
+  renderModalCats();
 }
 function saveEvent() {
   const title = document.getElementById('evtTitle').value.trim();
