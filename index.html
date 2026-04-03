@@ -475,11 +475,17 @@ function renderAuditorStats(){
   const el=document.getElementById('auditorStats');
   if(!el)return;
 
-  // 모든 일정에서 심사원 집계
+  const toArr=(v)=>{
+    if(!v) return [];
+    if(Array.isArray(v)) return v;
+    if(typeof v==='string') return v.split(',').map(s=>s.trim()).filter(Boolean);
+    return [];
+  };
+
   const envCount={}, safeCount={};
   EVTS.forEach(e=>{
-    (e.auditorEnv||[]).forEach(n=>{if(n)envCount[n]=(envCount[n]||0)+1});
-    (e.auditorSafe||[]).forEach(n=>{if(n)safeCount[n]=(safeCount[n]||0)+1});
+    toArr(e.auditorEnv).forEach(n=>{if(n)envCount[n]=(envCount[n]||0)+1});
+    toArr(e.auditorSafe).forEach(n=>{if(n)safeCount[n]=(safeCount[n]||0)+1});
   });
 
   const envList=Object.entries(envCount).sort((a,b)=>b[1]-a[1]);
@@ -732,8 +738,8 @@ function openEdit(id){
 function closeModal(){document.getElementById('overlay').classList.remove('open')}
 function overlayBg(e){if(e.target===document.getElementById('overlay'))closeModal()}
 
-// 쉼표로 구분된 입력 → 최대 N명 배열
 function parseAuditors(str,max){
+  if(!str||!str.trim()) return [];
   return str.split(',').map(s=>s.trim()).filter(Boolean).slice(0,max);
 }
 
