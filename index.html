@@ -312,7 +312,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 <script>
 // ── GOOGLE SHEETS API 설정 ──
 const API_URL = 'https://script.google.com/macros/s/AKfycbzWfphYkr0O44up6y1V8hBz6WDWnNMEcPb-4L702iIBgX8lVmFn0XlbMkHIJQwQYfkR/exec';
-const USE_SHEETS = true;
+const USE_SHEETS = false; // Sheets 연동 임시 비활성화
 
 // ── LOCAL FALLBACK STORAGE ──
 const S={
@@ -1006,7 +1006,18 @@ function renderAll(){
 
 // ── INIT ──
 async function init(){
-  // 1. URL 파라미터 처리
+  // 혹시 localStorage에 깨진 데이터가 있으면 초기화
+  try{
+    const testEvts=S.get('cal_evts');
+    if(testEvts) JSON.parse(testEvts); // 파싱 실패 시 catch로
+  }catch{
+    S.set('cal_evts','');
+    S.set('cal_cats','');
+    S.set('cal_sites','');
+    EVTS=DEVTS; CATS=DCATS; SITES=DSITES;
+  }
+
+  // URL 파라미터 처리
   try{
     const p=new URLSearchParams(location.search).get('data');
     if(p){
@@ -1018,53 +1029,12 @@ async function init(){
     }
   }catch{}
 
-  // 2. 로컬 저장된 타이틀 적용
+  // 로컬 타이틀 적용
   const t=S.get('cal_title');
   if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
 
-  // 3. 로컬 데이터로 즉시 렌더링 (화면 먼저 보여주기)
+  // 즉시 렌더링
   renderAll();
-
-  // 4. 백그라운드에서 Sheets 데이터 로드 (성공하면 화면 갱신)
-  if(USE_SHEETS){
-    showLoading(true);
-    try{
-      const d=await apiGet();
-      let changed=false;
-
-      if(d&&d.evts!==undefined){
-        // Sheets label/dot 필드 정규화 (name→label, color→dot 방어)
-        const normalize=(arr)=>arr.map(x=>({
-          ...x,
-          label:x.label||x.name||x.id,
-          dot:x.dot||x.color||'#888'
-        }));
-
-        EVTS=d.evts||[];
-        S.set('cal_evts',JSON.stringify(EVTS));
-
-        if(d.cats&&d.cats.length>0){
-          CATS=[DCATS[0],...normalize(d.cats)];
-          S.set('cal_cats',JSON.stringify(CATS));
-        }
-        if(d.sites&&d.sites.length>0){
-          SITES=[DSITES[0],...normalize(d.sites)];
-          S.set('cal_sites',JSON.stringify(SITES));
-        }
-        if(d.title){
-          document.getElementById('logoTitle').textContent=d.title;
-          document.title=d.title;
-          S.set('cal_title',d.title);
-        }
-        changed=true;
-      }
-      if(changed) renderAll();
-    }catch(err){
-      console.error('Sheets 로드 실패:', err);
-      // 로컬 데이터가 이미 표시되어 있으므로 별도 처리 불필요
-    }
-    showLoading(false);
-  }
 }
 init();
 
