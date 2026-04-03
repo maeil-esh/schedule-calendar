@@ -564,8 +564,10 @@
 
 <!-- HEADER -->
 <header>
-  <div class="logo">
-    📅 <span>일정 공유 캘린더</span>
+  <div class="logo" id="logoWrap">
+    📅
+    <span id="logoTitle" onclick="startEditTitle()" title="클릭하여 제목 변경" style="cursor:pointer;border-bottom:1.5px dashed transparent;transition:border-color 0.15s" onmouseenter="this.style.borderBottomColor='#1a56db'" onmouseleave="this.style.borderBottomColor='transparent'">일정 공유 캘린더</span>
+    <input id="logoInput" type="text" maxlength="30" style="display:none;font-size:15px;font-weight:700;border:none;border-bottom:2px solid #1a56db;outline:none;background:transparent;color:#1a1d23;width:180px;font-family:inherit" onblur="finishEditTitle()" onkeydown="if(event.key==='Enter')finishEditTitle();if(event.key==='Escape'){document.getElementById('logoInput').style.display='none';document.getElementById('logoTitle').style.display=''}">
   </div>
   <div class="header-actions">
     <button class="btn btn-ghost" onclick="exportICS()">📤 내보내기</button>
@@ -625,22 +627,25 @@
       <button class="btn btn-ghost today-btn" onclick="goToday()">오늘</button>
       <div class="view-toggle">
         <button class="view-btn active" id="vbMonth" onclick="setView('month')">월</button>
+        <button class="view-btn" id="vbDual" onclick="setView('dual')">2개월</button>
         <button class="view-btn" id="vbWeek" onclick="setView('week')">주</button>
         <button class="view-btn" id="vbList" onclick="setView('list')">목록</button>
       </div>
     </div>
 
-    <div class="cal-grid-wrap" id="calGridWrap">
-      <div class="cal-header">
-        <div class="cal-header-cell">일</div>
-        <div class="cal-header-cell">월</div>
-        <div class="cal-header-cell">화</div>
-        <div class="cal-header-cell">수</div>
-        <div class="cal-header-cell">목</div>
-        <div class="cal-header-cell">금</div>
-        <div class="cal-header-cell">토</div>
+    <div id="calContainer">
+      <div class="cal-grid-wrap" id="calGridWrap">
+        <div class="cal-header">
+          <div class="cal-header-cell">일</div>
+          <div class="cal-header-cell">월</div>
+          <div class="cal-header-cell">화</div>
+          <div class="cal-header-cell">수</div>
+          <div class="cal-header-cell">목</div>
+          <div class="cal-header-cell">금</div>
+          <div class="cal-header-cell">토</div>
+        </div>
+        <div class="cal-body" id="calBody"></div>
       </div>
-      <div class="cal-body" id="calBody"></div>
     </div>
   </main>
 </div>
@@ -868,6 +873,22 @@ function getFilteredEvents() {
 
 function renderMonthCal() {
   document.getElementById('monthTitle').textContent = `${curYear}년 ${curMonth+1}월`;
+
+  // 단일 월 뷰: container 초기화
+  const container = document.getElementById('calContainer');
+  container.style.display = '';
+  if (!document.getElementById('calBody')) {
+    container.innerHTML = `
+      <div class="cal-grid-wrap" id="calGridWrap" style="width:100%">
+        <div class="cal-header">
+          <div class="cal-header-cell">일</div><div class="cal-header-cell">월</div>
+          <div class="cal-header-cell">화</div><div class="cal-header-cell">수</div>
+          <div class="cal-header-cell">목</div><div class="cal-header-cell">금</div>
+          <div class="cal-header-cell">토</div>
+        </div>
+        <div class="cal-body" id="calBody"></div>
+      </div>`;
+  }
 
   const body = document.getElementById('calBody');
   body.innerHTML = '';
@@ -1143,6 +1164,29 @@ function deleteEvent() {
   showToast('일정이 삭제되었습니다.');
 }
 
+// ─────────────── TITLE EDIT ───────────────
+function startEditTitle() {
+  const span = document.getElementById('logoTitle');
+  const input = document.getElementById('logoInput');
+  input.value = span.textContent;
+  span.style.display = 'none';
+  input.style.display = '';
+  input.focus();
+  input.select();
+}
+function finishEditTitle() {
+  const span = document.getElementById('logoTitle');
+  const input = document.getElementById('logoInput');
+  const val = input.value.trim();
+  if (val) {
+    span.textContent = val;
+    document.title = val;
+    store.set('cal_title', val);
+  }
+  input.style.display = 'none';
+  span.style.display = '';
+}
+
 // ─────────────── NAV ───────────────
 function prevMonth() { curMonth--; if (curMonth < 0) { curMonth = 11; curYear--; } renderAll(); }
 function nextMonth() { curMonth++; if (curMonth > 11) { curMonth = 0; curYear++; } renderAll(); }
@@ -1152,18 +1196,197 @@ function goToday() { curYear = today.getFullYear(); curMonth = today.getMonth();
 let currentView = 'month';
 function setView(v) {
   currentView = v;
-  ['Month','Week','List'].forEach(n => document.getElementById('vb'+n).classList.toggle('active', v === n.toLowerCase()));
+  ['Month','Dual','Week','List'].forEach(n => {
+    const el = document.getElementById('vb'+n);
+    if (el) el.classList.toggle('active', v === n.toLowerCase());
+  });
   renderMain();
 }
 function renderMain() {
   if (currentView === 'month') renderMonthCal();
+  else if (currentView === 'dual') renderDualCal();
   else if (currentView === 'week') renderWeekView();
   else renderListView();
 }
 
+// ─────────────── DUAL MONTH VIEW ───────────────
+function makeSingleMonthGrid(year, month) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cal-grid-wrap';
+  wrap.style.flex = '1';
+  wrap.style.minWidth = '0';
+
+  // Month label
+  const label = document.createElement('div');
+  label.style.cssText = 'padding:10px 16px 6px;font-size:14px;font-weight:700;color:#1a1d23;border-bottom:1px solid var(--border);background:var(--surface2)';
+  label.textContent = `${year}년 ${month+1}월`;
+  wrap.appendChild(label);
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'cal-header';
+  ['일','월','화','수','목','금','토'].forEach(d => {
+    const cell = document.createElement('div');
+    cell.className = 'cal-header-cell';
+    cell.textContent = d;
+    header.appendChild(cell);
+  });
+  wrap.appendChild(header);
+
+  // Body - reuse renderMonthCal logic for this month
+  const body = document.createElement('div');
+  body.className = 'cal-body';
+  body.id = `calBody_${year}_${month}`;
+  wrap.appendChild(body);
+
+  return wrap;
+}
+
+function renderDualCal() {
+  // Compute second month
+  let y2 = curYear, m2 = curMonth + 1;
+  if (m2 > 11) { m2 = 0; y2++; }
+
+  document.getElementById('monthTitle').textContent = `${curYear}년 ${curMonth+1}월 — ${y2}년 ${m2+1}월`;
+
+  const container = document.getElementById('calContainer');
+  container.innerHTML = '';
+  container.style.display = 'flex';
+  container.style.gap = '12px';
+
+  const g1 = makeSingleMonthGrid(curYear, curMonth);
+  const g2 = makeSingleMonthGrid(y2, m2);
+  container.appendChild(g1);
+  container.appendChild(g2);
+
+  fillMonthBody(curYear, curMonth, `calBody_${curYear}_${curMonth}`);
+  fillMonthBody(y2, m2, `calBody_${y2}_${m2}`);
+}
+
+function fillMonthBody(year, month, bodyId) {
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  body.innerHTML = '';
+
+  const first = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+  const todayStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
+  const filtered = getFilteredEvents();
+  const weeks = Math.ceil((first + daysInMonth) / 7);
+
+  for (let row = 0; row < weeks; row++) {
+    const weekCells = [];
+    for (let col = 0; col < 7; col++) {
+      const idx = row * 7 + col;
+      const dayNum = idx - first + 1;
+      let y = year, m = month, d = dayNum;
+      let otherMonth = false;
+      if (dayNum < 1) { d = daysInPrev - first + 1 + idx; m = month - 1; if (m < 0) { m = 11; y--; } otherMonth = true; }
+      else if (dayNum > daysInMonth) { d = dayNum - daysInMonth; m = month + 1; if (m > 11) { m = 0; y++; } otherMonth = true; }
+      weekCells.push({ year: y, month: m, day: d, dateStr: fmtDate(y, m, d), otherMonth, col });
+    }
+
+    const weekStartDate = parseDate(weekCells[0].dateStr);
+    const weekEndDate = parseDate(weekCells[6].dateStr);
+    const weekEvents = filtered.filter(e => {
+      const s = parseDate(e.start), en = parseDate(e.end);
+      return s <= weekEndDate && en >= weekStartDate;
+    }).sort((a,b) => (parseDate(b.end)-parseDate(b.start)) - (parseDate(a.end)-parseDate(a.start)));
+
+    const slots = {}, evtSlot = {};
+    weekEvents.forEach(e => {
+      const s = parseDate(e.start), en = parseDate(e.end);
+      const sc = Math.max(0, Math.round((s - weekStartDate) / 86400000));
+      const ec = Math.min(6, Math.round((en - weekStartDate) / 86400000));
+      let slot = 0;
+      while (true) {
+        let ok = true;
+        for (let c = sc; c <= ec; c++) { if ((slots[c]||[])[slot]) { ok = false; break; } }
+        if (ok) break; slot++;
+      }
+      evtSlot[e.id] = { slot, startCol: sc, endCol: ec };
+      for (let c = sc; c <= ec; c++) { if (!slots[c]) slots[c] = []; slots[c][slot] = e.id; }
+    });
+
+    const frag = document.createDocumentFragment();
+    weekCells.forEach(({ year: y, month: m, day: d, dateStr, otherMonth, col }) => {
+      const dow = new Date(y, m, d).getDay();
+      const isHoliday = !!holidays[dateStr];
+      let cls = 'cal-cell';
+      if (otherMonth) cls += ' other-month';
+      if (dateStr === todayStr) cls += ' is-today';
+      if (dow === 0 || isHoliday) cls += ' is-sun';
+      if (dow === 6) cls += ' is-sat';
+
+      const cell = document.createElement('div');
+      cell.className = cls;
+      cell.style.minHeight = '80px';
+
+      const dw = document.createElement('div');
+      dw.className = 'cell-date-wrap';
+      const de = document.createElement('div');
+      de.className = 'cell-date';
+      de.textContent = d;
+      dw.appendChild(de);
+      if (isHoliday) {
+        const hl = document.createElement('div');
+        hl.className = 'cell-holiday-label';
+        hl.textContent = holidays[dateStr];
+        dw.appendChild(hl);
+      }
+      cell.appendChild(dw);
+
+      const cellEvts = document.createElement('div');
+      cellEvts.className = 'cell-events';
+      const colEvts = weekEvents.filter(e => {
+        const {startCol, endCol} = evtSlot[e.id];
+        return col >= startCol && col <= endCol;
+      }).sort((a,b) => evtSlot[a.id].slot - evtSlot[b.id].slot);
+
+      let lastSlot = -1;
+      colEvts.forEach(e => {
+        const {slot, startCol, endCol} = evtSlot[e.id];
+        for (let s = lastSlot+1; s < slot; s++) {
+          const sp = document.createElement('div');
+          sp.style.cssText = 'height:20px;margin-bottom:2px';
+          cellEvts.appendChild(sp);
+        }
+        lastSlot = slot;
+        const bar = document.createElement('div');
+        const isStart = col === startCol, isEnd = col === endCol;
+        let sc2 = 'event-bar ' + e.cat;
+        if (isStart && isEnd) sc2 += ' span-start-end';
+        else if (isStart) sc2 += ' span-start';
+        else if (isEnd) sc2 += ' span-end';
+        else sc2 += ' span-mid';
+        bar.className = sc2;
+        bar.textContent = isStart ? e.title : '';
+        bar.title = e.title;
+        bar.onclick = (ev) => { ev.stopPropagation(); showDetail(e.id, ev); };
+        cellEvts.appendChild(bar);
+      });
+      cell.appendChild(cellEvts);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-btn';
+      addBtn.textContent = '+';
+      addBtn.onclick = (ev) => { ev.stopPropagation(); openAddModal(dateStr); };
+      cell.appendChild(addBtn);
+      cell.onclick = () => closeDetail();
+      frag.appendChild(cell);
+    });
+    body.appendChild(frag);
+  }
+}
+
 function renderWeekView() {
   document.getElementById('monthTitle').textContent = `${curYear}년 ${curMonth+1}월`;
-  const wrap = document.getElementById('calGridWrap');
+  const container = document.getElementById('calContainer');
+  container.style.display = '';
+  if (!document.getElementById('calBody')) {
+    container.innerHTML = `<div class="cal-grid-wrap" id="calGridWrap" style="width:100%"><div class="cal-header"><div class="cal-header-cell">일</div><div class="cal-header-cell">월</div><div class="cal-header-cell">화</div><div class="cal-header-cell">수</div><div class="cal-header-cell">목</div><div class="cal-header-cell">금</div><div class="cal-header-cell">토</div></div><div class="cal-body" id="calBody"></div></div>`;
+  }
   const body = document.getElementById('calBody');
   body.innerHTML = '';
   // Show 4 weeks around today's week
@@ -1215,6 +1438,11 @@ function renderWeekView() {
 
 function renderListView() {
   document.getElementById('monthTitle').textContent = `${curYear}년 ${curMonth+1}월`;
+  const container = document.getElementById('calContainer');
+  container.style.display = '';
+  if (!document.getElementById('calBody')) {
+    container.innerHTML = `<div class="cal-grid-wrap" id="calGridWrap" style="width:100%"><div class="cal-body" id="calBody"></div></div>`;
+  }
   const body = document.getElementById('calBody');
   body.style.display = 'block';
   body.innerHTML = '';
@@ -1305,6 +1533,12 @@ function renderAll() {
 
 // ─────────────── INIT ───────────────
 loadFromUrl();
+// 저장된 타이틀 복원
+const savedTitle = store.get('cal_title');
+if (savedTitle) {
+  document.getElementById('logoTitle').textContent = savedTitle;
+  document.title = savedTitle;
+}
 renderAll();
 
 // Keyboard shortcuts
