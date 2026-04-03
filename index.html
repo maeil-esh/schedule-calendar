@@ -133,7 +133,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     📅 <span id="logoTitle">일정 공유 캘린더</span>
   </div>
   <div class="header-actions">
-    <button class="btn btn-ghost" onclick="openSettings()">⚙️ 기준정보</button>
+    <button class="btn btn-ghost" onclick="checkPassword()">⚙️ 기준정보</button>
     <button class="btn btn-ghost" onclick="exportICS()">📤 내보내기</button>
     <button class="btn btn-ghost" onclick="shareCalendar()">🔗 공유</button>
     <button class="btn btn-primary" onclick="openAdd(null,null)">+ 일정 추가</button>
@@ -254,6 +254,28 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     </div>
     <div class="modal-ft" style="margin-top:16px">
       <button class="btn btn-primary" onclick="applySettings()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 비밀번호 확인 MODAL ── -->
+<div class="overlay" id="pwOverlay" onclick="if(event.target===this)closePw()">
+  <div class="modal" style="width:320px" onclick="event.stopPropagation()">
+    <div class="modal-hd">
+      <h2>🔒 관리자 확인</h2>
+      <button class="modal-close" onclick="closePw()">✕</button>
+    </div>
+    <div class="fg">
+      <label>비밀번호</label>
+      <input class="fi2" id="pwInput" type="password" placeholder="비밀번호를 입력하세요"
+        onkeydown="if(event.key==='Enter')submitPw()">
+    </div>
+    <div id="pwError" style="font-size:12px;color:var(--red);margin-top:-8px;margin-bottom:10px;display:none">
+      ❌ 비밀번호가 올바르지 않습니다.
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closePw()">취소</button>
+      <button class="btn btn-primary" onclick="submitPw()">확인</button>
     </div>
   </div>
 </div>
@@ -443,6 +465,31 @@ function renderSiteList(){
     item.onclick=()=>{activeSite=site.id;renderAll()};
     el.appendChild(item);
   });
+}
+
+// ── 비밀번호 ──
+// 비밀번호 변경은 아래 ADMIN_PW 값을 수정하세요
+const ADMIN_PW = '1234';
+
+function checkPassword(){
+  document.getElementById('pwInput').value='';
+  document.getElementById('pwError').style.display='none';
+  document.getElementById('pwOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('pwInput').focus(),80);
+}
+function closePw(){
+  document.getElementById('pwOverlay').classList.remove('open');
+}
+function submitPw(){
+  const entered=document.getElementById('pwInput').value;
+  if(entered===ADMIN_PW){
+    closePw();
+    openSettings();
+  } else {
+    document.getElementById('pwError').style.display='block';
+    document.getElementById('pwInput').value='';
+    document.getElementById('pwInput').focus();
+  }
 }
 
 // ── SETTINGS MODAL ──
