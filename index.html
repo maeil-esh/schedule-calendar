@@ -7,7 +7,7 @@
 <style>
 :root{--bg:#f0f2f5;--surface:#fff;--surface2:#f7f8fa;--border:#e2e6eb;--text:#1a1d23;--muted:#7a8394;--accent:#1a56db;--accent-light:#e8f0fe;--red:#ef4444;--radius:10px;--sh:0 2px 12px rgba(0,0,0,.07);--sh-lg:0 8px 32px rgba(0,0,0,.14)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Apple SD Gothic Neo','맑은 고딕','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;user-select:none}
+body{font-family:'Apple SD Gothic Neo','맑은 고딕','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#1447b3}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--surface2);color:var(--text)}
@@ -16,8 +16,10 @@ body{font-family:'Apple SD Gothic Neo','맑은 고딕','Malgun Gothic',sans-seri
 
 /* HEADER */
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:300;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.cal-body,.cal-cell,.ev-bar,.sidebar,.fi-item{user-select:none}
 .logo{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}
-.logo-title{color:var(--text);cursor:pointer;border-bottom:1.5px dashed transparent;transition:border-color .15s}.logo-title:hover{border-bottom-color:var(--accent)}
+.logo-title{color:var(--text);cursor:pointer;border-bottom:1.5px dashed #c9cdd6;transition:border-color .15s}
+.logo-title:hover{border-bottom-color:var(--accent)}
 .logo-input{display:none;font-size:15px;font-weight:700;border:none;border-bottom:2px solid var(--accent);outline:none;background:transparent;color:var(--text);width:200px;font-family:inherit}
 .header-actions{display:flex;gap:8px;align-items:center}
 
@@ -121,16 +123,6 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .master-add{width:100%;padding:8px;border:1px dashed #c9cdd6;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:var(--muted);font-family:inherit;transition:all .12s;margin-top:4px}
 .master-add:hover{border-color:var(--accent);color:var(--accent)}
 
-/* DETAIL POPUP */
-.detail-pop{display:none;position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;width:260px;box-shadow:var(--sh-lg);animation:fadeIn .15s ease}
-@keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-.detail-pop.open{display:block}
-.dp-title{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-.dp-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:3px}
-.dp-badges{display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap}
-.dp-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff}
-.detail-actions{display:flex;gap:6px;margin-top:10px}
-
 /* TOAST */
 .toast{position:fixed;bottom:24px;right:24px;background:#1a1d23;color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:2000;opacity:0;transform:translateY(8px);transition:all .22s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
@@ -141,7 +133,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 <header>
   <div class="logo">
     📅
-    <span class="logo-title" id="logoTitle" onclick="startEditTitle()">일정 공유 캘린더</span>
+    <span class="logo-title" id="logoTitle" onclick="startEditTitle()" title="클릭하여 제목 변경">일정 공유 캘린더</span>
+    <span onclick="startEditTitle()" style="font-size:12px;color:#c9cdd6;cursor:pointer;margin-left:-4px" title="제목 변경">✏️</span>
     <input class="logo-input" id="logoInput" maxlength="30"
       onblur="finishTitle()"
       onkeydown="if(event.key==='Enter')finishTitle();if(event.key==='Escape')cancelTitle()">
@@ -265,19 +258,6 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
   </div>
 </div>
 
-<!-- ── DETAIL POPUP ── -->
-<div class="detail-pop" id="detailPop">
-  <div class="dp-title" id="dpTitle"></div>
-  <div class="dp-badges" id="dpBadges"></div>
-  <div class="dp-row" id="dpDate"></div>
-  <div class="dp-row" id="dpNote"></div>
-  <div class="detail-actions">
-    <button class="btn btn-ghost btn-sm" onclick="editFromDetail()">✏️ 수정</button>
-    <button class="btn btn-danger btn-sm" onclick="delFromDetail()">🗑️ 삭제</button>
-    <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeDetail()">✕</button>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -339,7 +319,7 @@ let curY=TODAY.getFullYear(),curM=TODAY.getMonth();
 let miniY=curY,miniM=curM;
 let activeCat='all',activeSite='site-all';
 let currentView='month';
-let editingId=null,detailId=null;
+let editingId=null;
 let selCat='cat-check',selSites=[];
 
 // ── HELPERS ──
@@ -350,9 +330,34 @@ function todayStr(){return fmt(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDat
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 
 // ── TITLE ──
-function startEditTitle(){const sp=document.getElementById('logoTitle'),inp=document.getElementById('logoInput');inp.value=sp.textContent;sp.style.display='none';inp.style.display='';inp.focus();inp.select()}
-function finishTitle(){const sp=document.getElementById('logoTitle'),inp=document.getElementById('logoInput');const v=inp.value.trim();if(v){sp.textContent=v;document.title=v;S.set('cal_title',v)}inp.style.display='none';sp.style.display=''}
-function cancelTitle(){document.getElementById('logoInput').style.display='none';document.getElementById('logoTitle').style.display=''}
+function startEditTitle(){
+  const sp=document.getElementById('logoTitle');
+  const inp=document.getElementById('logoInput');
+  const icon=sp.nextElementSibling; // 연필 아이콘
+  inp.value=sp.textContent;
+  sp.style.display='none';
+  if(icon&&icon.tagName==='SPAN') icon.style.display='none';
+  inp.style.display='';
+  inp.focus();inp.select();
+}
+function finishTitle(){
+  const sp=document.getElementById('logoTitle');
+  const inp=document.getElementById('logoInput');
+  const icon=sp.nextElementSibling;
+  const v=inp.value.trim();
+  if(v){sp.textContent=v;document.title=v;S.set('cal_title',v)}
+  inp.style.display='none';
+  sp.style.display='';
+  if(icon&&icon.tagName==='SPAN') icon.style.display='';
+}
+function cancelTitle(){
+  const sp=document.getElementById('logoTitle');
+  const inp=document.getElementById('logoInput');
+  const icon=sp.nextElementSibling;
+  inp.style.display='none';
+  sp.style.display='';
+  if(icon&&icon.tagName==='SPAN') icon.style.display='';
+}
 
 // ── MINI CALENDAR ──
 function renderMini(){
@@ -611,11 +616,6 @@ function showDetail(id,ev){
   if(top+180>window.innerHeight)top=r.top-192;
   pop.style.top=top+'px';pop.style.left=left+'px';
 }
-function closeDetail(){document.getElementById('detailPop').classList.remove('open');detailId=null}
-function editFromDetail(){if(!detailId)return;const id=detailId;closeDetail();openEdit(id)}
-function delFromDetail(){if(!detailId)return;EVTS=EVTS.filter(e=>e.id!==detailId);saveEvts();closeDetail();renderAll();toast('삭제되었습니다.')}
-document.addEventListener('click',e=>{const pop=document.getElementById('detailPop');if(pop.classList.contains('open')&&!pop.contains(e.target))closeDetail()});
-
 // ── DRAG TO SELECT ──
 function attachDrag(bodyEl){
   let ds=null,de=null,dragging=false;
@@ -623,6 +623,7 @@ function attachDrag(bodyEl){
     const cell=e.target.closest('.cal-cell');
     if(!cell||!cell.dataset.date)return;
     if(e.target.closest('.ev-bar'))return;
+    if(e.target.closest('button'))return;
     dragging=true;ds=cell.dataset.date;de=cell.dataset.date;
     highlight(bodyEl,ds,de);e.preventDefault();
   });
@@ -724,11 +725,11 @@ function buildGrid(year,month,bodyEl){
           bar.appendChild(titleSpan);
         }
         bar.title=e.title+(e.sites?.length?` [${(e.sites||[]).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`:'');
-        bar.addEventListener('click',ev=>{ev.stopPropagation();showDetail(e.id,ev)});
+        bar.addEventListener('click',ev=>{ev.stopPropagation();openEdit(e.id)});
         evWrap.appendChild(bar);
       });
       cell.appendChild(evWrap);
-      cell.addEventListener('click',()=>closeDetail());
+      cell.addEventListener('click',()=>{});
       frag.appendChild(cell);
     });
     bodyEl.appendChild(frag);
@@ -790,7 +791,7 @@ function renderList(){
         ${e.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${e.note}</div>`:''}
       </div>
       <div style="font-size:12px;color:var(--muted);white-space:nowrap">${e.start}${e.start!==e.end?' ~ '+e.end:''}</div>`;
-    row.addEventListener('click',ev=>showDetail(e.id,ev));
+    row.addEventListener('click',()=>openEdit(e.id));
     wrap.appendChild(row);
   });
   con.appendChild(wrap);
