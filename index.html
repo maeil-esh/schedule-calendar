@@ -322,25 +322,32 @@ const S={
   set(k,v){try{localStorage.setItem(k,v)}catch{}}
 };
 
-// ── API 함수 (JSONP 방식 - CORS 우회) ──
+// ── API 함수 (fetch 방식) ──
 function apiGet(){
   return new Promise((resolve,reject)=>{
-    const cbName='_cb'+Date.now();
-    const script=document.createElement('script');
-    const timeout=setTimeout(()=>{
-      delete window[cbName];
-      document.body.removeChild(script);
-      reject(new Error('timeout'));
-    },10000);
-    window[cbName]=function(data){
-      clearTimeout(timeout);
-      delete window[cbName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    script.src=API_URL+'?action=getAll&callback='+cbName;
-    script.onerror=()=>{clearTimeout(timeout);reject(new Error('script error'))};
-    document.body.appendChild(script);
+    // 방법1: fetch (CORS 허용 시)
+    fetch(API_URL+'?action=getAll')
+      .then(r=>r.json())
+      .then(resolve)
+      .catch(()=>{
+        // 방법2: JSONP 폴백
+        const cbName='_cb'+Date.now();
+        const script=document.createElement('script');
+        const timeout=setTimeout(()=>{
+          delete window[cbName];
+          if(document.body.contains(script)) document.body.removeChild(script);
+          reject(new Error('timeout'));
+        },10000);
+        window[cbName]=function(data){
+          clearTimeout(timeout);
+          delete window[cbName];
+          if(document.body.contains(script)) document.body.removeChild(script);
+          resolve(data);
+        };
+        script.src=API_URL+'?action=getAll&callback='+cbName;
+        script.onerror=()=>{clearTimeout(timeout);reject(new Error('script error'))};
+        document.body.appendChild(script);
+      });
   });
 }
 async function apiPost(action,payload){
@@ -349,12 +356,8 @@ async function apiPost(action,payload){
     Object.entries(payload).forEach(([k,v])=>{
       params.append(k, typeof v==='object'?JSON.stringify(v):String(v));
     });
-    const script=document.createElement('script');
-    const cbName='_save'+Date.now();
-    window[cbName]=function(){delete window[cbName];document.body.removeChild(script)};
-    script.src=API_URL+'?'+params.toString()+'&callback='+cbName;
-    script.onerror=()=>{delete window[cbName];document.body.removeChild(script)};
-    document.body.appendChild(script);
+    // fetch no-cors로 저장 (응답 확인 불가하지만 저장은 됨)
+    await fetch(API_URL+'?'+params.toString(),{method:'GET',mode:'no-cors'});
   }catch{}
 }
 
