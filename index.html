@@ -1006,7 +1006,7 @@ function renderAll(){
 
 // ── INIT ──
 async function init(){
-  // URL 파라미터 공유 데이터 처리
+  // 1. URL 파라미터 처리
   try{
     const p=new URLSearchParams(location.search).get('data');
     if(p){
@@ -1018,40 +1018,53 @@ async function init(){
     }
   }catch{}
 
+  // 2. 로컬 저장된 타이틀 적용
+  const t=S.get('cal_title');
+  if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
+
+  // 3. 로컬 데이터로 즉시 렌더링 (화면 먼저 보여주기)
+  renderAll();
+
+  // 4. 백그라운드에서 Sheets 데이터 로드 (성공하면 화면 갱신)
   if(USE_SHEETS){
-    // Google Sheets에서 최신 데이터 로드
     showLoading(true);
     try{
       const d=await apiGet();
-      if(d.evts&&d.evts.length>=0){
-        EVTS=d.evts;
+      let changed=false;
+
+      if(d&&d.evts!==undefined){
+        // Sheets label/dot 필드 정규화 (name→label, color→dot 방어)
+        const normalize=(arr)=>arr.map(x=>({
+          ...x,
+          label:x.label||x.name||x.id,
+          dot:x.dot||x.color||'#888'
+        }));
+
+        EVTS=d.evts||[];
         S.set('cal_evts',JSON.stringify(EVTS));
+
+        if(d.cats&&d.cats.length>0){
+          CATS=[DCATS[0],...normalize(d.cats)];
+          S.set('cal_cats',JSON.stringify(CATS));
+        }
+        if(d.sites&&d.sites.length>0){
+          SITES=[DSITES[0],...normalize(d.sites)];
+          S.set('cal_sites',JSON.stringify(SITES));
+        }
+        if(d.title){
+          document.getElementById('logoTitle').textContent=d.title;
+          document.title=d.title;
+          S.set('cal_title',d.title);
+        }
+        changed=true;
       }
-      if(d.cats&&d.cats.length>0){
-        CATS=[DCATS[0],...d.cats]; // '전체' 고정항목 + Sheets 데이터
-        S.set('cal_cats',JSON.stringify(CATS));
-      }
-      if(d.sites&&d.sites.length>0){
-        SITES=[DSITES[0],...d.sites];
-        S.set('cal_sites',JSON.stringify(SITES));
-      }
-      if(d.title){
-        document.getElementById('logoTitle').textContent=d.title;
-        document.title=d.title;
-        S.set('cal_title',d.title);
-      }
+      if(changed) renderAll();
     }catch(err){
-      toast('⚠️ 서버 연결 실패 - 로컬 데이터로 표시합니다.');
-      console.error(err);
+      console.error('Sheets 로드 실패:', err);
+      // 로컬 데이터가 이미 표시되어 있으므로 별도 처리 불필요
     }
     showLoading(false);
-  } else {
-    // localStorage 모드
-    const t=S.get('cal_title');
-    if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
   }
-
-  renderAll();
 }
 init();
 
