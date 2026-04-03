@@ -728,8 +728,8 @@ function openEdit(id){
   document.getElementById('delBtn').style.display='';
   document.getElementById('fEvtTitle').value=ev.title;
   document.getElementById('fNote').value=ev.note||'';
-  document.getElementById('fAuditorEnv').value=(ev.auditorEnv||[]).join(', ');
-  document.getElementById('fAuditorSafe').value=(ev.auditorSafe||[]).join(', ');
+  document.getElementById('fAuditorEnv').value=toArr(ev.auditorEnv).join(', ');
+  document.getElementById('fAuditorSafe').value=toArr(ev.auditorSafe).join(', ');
   document.getElementById('fStart').value=ev.start;
   document.getElementById('fEnd').value=ev.end;
   renderCatPills();renderSitePills();
