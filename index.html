@@ -18,9 +18,7 @@ body{font-family:'Apple SD Gothic Neo','맑은 고딕','Malgun Gothic',sans-seri
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:300;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .cal-body,.cal-cell,.ev-bar,.sidebar,.fi-item{user-select:none}
 .logo{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}
-.logo-title{color:var(--text);cursor:pointer;border-bottom:1.5px dashed #c9cdd6;transition:border-color .15s}
-.logo-title:hover{border-bottom-color:var(--accent)}
-.logo-input{display:none;font-size:15px;font-weight:700;border:none;border-bottom:2px solid var(--accent);outline:none;background:transparent;color:var(--text);width:200px;font-family:inherit}
+.logo span{color:var(--text)}
 .header-actions{display:flex;gap:8px;align-items:center}
 
 /* LAYOUT */
@@ -132,12 +130,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 
 <header>
   <div class="logo">
-    📅
-    <span class="logo-title" id="logoTitle" onclick="startEditTitle()" title="클릭하여 제목 변경">일정 공유 캘린더</span>
-    <span onclick="startEditTitle()" style="font-size:12px;color:#c9cdd6;cursor:pointer;margin-left:-4px" title="제목 변경">✏️</span>
-    <input class="logo-input" id="logoInput" maxlength="30"
-      onblur="finishTitle()"
-      onkeydown="if(event.key==='Enter')finishTitle();if(event.key==='Escape')cancelTitle()">
+    📅 <span id="logoTitle">일정 공유 캘린더</span>
   </div>
   <div class="header-actions">
     <button class="btn btn-ghost" onclick="openSettings()">⚙️ 기준정보</button>
@@ -239,11 +232,18 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       <button class="modal-close" onclick="closeSettings()">✕</button>
     </div>
     <div class="stab">
-      <button class="stab-btn active" id="stab-cat" onclick="switchStab('cat')">업무유형</button>
+      <button class="stab-btn active" id="stab-title" onclick="switchStab('title')">제목</button>
+      <button class="stab-btn" id="stab-cat" onclick="switchStab('cat')">업무유형</button>
       <button class="stab-btn" id="stab-site" onclick="switchStab('site')">사업장</button>
     </div>
+    <!-- 제목 패널 -->
+    <div class="stab-panel active" id="spanel-title">
+      <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">캘린더 상단에 표시되는 제목을 입력하세요.</div>
+      <input class="fi2" id="titleInput" maxlength="40" placeholder="예) 매일유업 안전점검 일정"
+        style="font-size:15px;font-weight:600;padding:10px 14px">
+    </div>
     <!-- 업무유형 패널 -->
-    <div class="stab-panel active" id="spanel-cat">
+    <div class="stab-panel" id="spanel-cat">
       <div id="masterCatList"></div>
       <button class="master-add" onclick="addCat()">+ 업무유형 추가</button>
     </div>
@@ -253,7 +253,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       <button class="master-add" onclick="addSite()">+ 사업장 추가</button>
     </div>
     <div class="modal-ft" style="margin-top:16px">
-      <button class="btn btn-primary" onclick="closeSettings()">확인</button>
+      <button class="btn btn-primary" onclick="applySettings()">저장</button>
     </div>
   </div>
 </div>
@@ -329,36 +329,6 @@ function uid(){return 'x'+Date.now()+Math.random().toString(36).slice(2,5)}
 function todayStr(){return fmt(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate())}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 
-// ── TITLE ──
-function startEditTitle(){
-  const sp=document.getElementById('logoTitle');
-  const inp=document.getElementById('logoInput');
-  const icon=sp.nextElementSibling; // 연필 아이콘
-  inp.value=sp.textContent;
-  sp.style.display='none';
-  if(icon&&icon.tagName==='SPAN') icon.style.display='none';
-  inp.style.display='';
-  inp.focus();inp.select();
-}
-function finishTitle(){
-  const sp=document.getElementById('logoTitle');
-  const inp=document.getElementById('logoInput');
-  const icon=sp.nextElementSibling;
-  const v=inp.value.trim();
-  if(v){sp.textContent=v;document.title=v;S.set('cal_title',v)}
-  inp.style.display='none';
-  sp.style.display='';
-  if(icon&&icon.tagName==='SPAN') icon.style.display='';
-}
-function cancelTitle(){
-  const sp=document.getElementById('logoTitle');
-  const inp=document.getElementById('logoInput');
-  const icon=sp.nextElementSibling;
-  inp.style.display='none';
-  sp.style.display='';
-  if(icon&&icon.tagName==='SPAN') icon.style.display='';
-}
-
 // ── MINI CALENDAR ──
 function renderMini(){
   const evDates=new Set(EVTS.flatMap(e=>{const ds=[];let d=pDate(e.start);const en=pDate(e.end);while(d<=en){ds.push(fmt(d.getFullYear(),d.getMonth(),d.getDate()));d.setDate(d.getDate()+1)}return ds}));
@@ -416,19 +386,34 @@ function renderSiteList(){
 }
 
 // ── SETTINGS MODAL ──
-let settingsTab='cat';
+let settingsTab='title';
 function openSettings(){
+  // 현재 타이틀 입력창에 채우기
+  document.getElementById('titleInput').value=document.getElementById('logoTitle').textContent;
   renderMasterCatList();
   renderMasterSiteList();
+  switchStab('title');
   document.getElementById('settingsOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('titleInput').focus(),80);
 }
 function closeSettings(){
   document.getElementById('settingsOverlay').classList.remove('open');
   renderAll();
 }
+function applySettings(){
+  // 제목 저장
+  const v=document.getElementById('titleInput').value.trim();
+  if(v){
+    document.getElementById('logoTitle').textContent=v;
+    document.title=v;
+    S.set('cal_title',v);
+  }
+  closeSettings();
+  toast('기준정보가 저장되었습니다.');
+}
 function switchStab(tab){
   settingsTab=tab;
-  ['cat','site'].forEach(t=>{
+  ['title','cat','site'].forEach(t=>{
     document.getElementById('stab-'+t).classList.toggle('active',t===tab);
     document.getElementById('spanel-'+t).classList.toggle('active',t===tab);
   });
