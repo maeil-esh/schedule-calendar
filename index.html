@@ -121,6 +121,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .master-add{width:100%;padding:8px;border:1px dashed #c9cdd6;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:var(--muted);font-family:inherit;transition:all .12s;margin-top:4px}
 .master-add:hover{border-color:var(--accent);color:var(--accent)}
 
+/* AUDITOR STATS */
+.auditor-group{margin-bottom:10px}
+.auditor-group-label{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-bottom:5px;padding:0 2px}
+.auditor-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.auditor-card{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 8px;display:flex;flex-direction:column;gap:2px}
+.auditor-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.auditor-count{font-size:18px;font-weight:700;color:var(--accent);line-height:1}
+.auditor-unit{font-size:10px;color:var(--muted)}
+.auditor-bar{height:3px;border-radius:2px;background:var(--border);margin-top:4px;overflow:hidden}
+.auditor-bar-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .3s}
+
 /* TOAST */
 .toast{position:fixed;bottom:24px;right:24px;background:#1a1d23;color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:2000;opacity:0;transform:translateY(8px);transition:all .22s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
@@ -160,6 +171,12 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
         <h3>사업장</h3>
       </div>
       <div id="siteList"></div>
+    </div>
+
+    <!-- 심사원 현황 -->
+    <div class="sb-section">
+      <h3>심사원 현황</h3>
+      <div id="auditorStats"></div>
     </div>
 
     <!-- 공유 링크 -->
@@ -214,7 +231,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       <div class="pill-group" id="sitePills"></div>
     </div>
 
-    <div class="fg"><label>담당자 / 메모</label><input class="fi2" id="fNote" maxlength="100" placeholder="예) 홍길동 / 방사선 측정 포함"></div>
+    <div class="fg"><label>담당자 / 메모</label><input class="fi2" id="fNote" maxlength="100" placeholder="예) 방사선 측정 포함"></div>
+
+    <!-- 심사원 입력 -->
+    <div class="fg">
+      <label>심사원 — 환경 분야 (최대 4명, 쉼표로 구분)</label>
+      <input class="fi2" id="fAuditorEnv" maxlength="80" placeholder="예) 홍길동, 김철수">
+    </div>
+    <div class="fg">
+      <label>심사원 — 안전 분야 (최대 4명, 쉼표로 구분)</label>
+      <input class="fi2" id="fAuditorSafe" maxlength="80" placeholder="예) 이영희, 박민준">
+    </div>
 
     <div class="modal-ft">
       <button class="btn btn-danger" id="delBtn" style="display:none;margin-right:auto" onclick="deleteEvt()">삭제</button>
@@ -441,6 +468,46 @@ function miniNext(){miniM++;if(miniM>11){miniM=0;miniY++;}renderMini()}
 function renderFilterLists(){
   renderCatList();
   renderSiteList();
+  renderAuditorStats();
+}
+
+function renderAuditorStats(){
+  const el=document.getElementById('auditorStats');
+  if(!el)return;
+
+  // 모든 일정에서 심사원 집계
+  const envCount={}, safeCount={};
+  EVTS.forEach(e=>{
+    (e.auditorEnv||[]).forEach(n=>{if(n)envCount[n]=(envCount[n]||0)+1});
+    (e.auditorSafe||[]).forEach(n=>{if(n)safeCount[n]=(safeCount[n]||0)+1});
+  });
+
+  const envList=Object.entries(envCount).sort((a,b)=>b[1]-a[1]);
+  const safeList=Object.entries(safeCount).sort((a,b)=>b[1]-a[1]);
+  const maxCount=Math.max(1,...envList.map(x=>x[1]),...safeList.map(x=>x[1]));
+
+  function makeGroup(label,color,list){
+    if(!list.length) return '';
+    const cards=list.map(([name,cnt])=>`
+      <div class="auditor-card">
+        <div class="auditor-name" title="${name}">${name}</div>
+        <div style="display:flex;align-items:baseline;gap:3px">
+          <div class="auditor-count" style="color:${color}">${cnt}</div>
+          <div class="auditor-unit">회</div>
+        </div>
+        <div class="auditor-bar"><div class="auditor-bar-fill" style="width:${Math.round(cnt/maxCount*100)}%;background:${color}"></div></div>
+      </div>`).join('');
+    return `<div class="auditor-group">
+      <div class="auditor-group-label" style="color:${color}">● ${label}</div>
+      <div class="auditor-grid">${cards}</div>
+    </div>`;
+  }
+
+  const html=(envList.length||safeList.length)
+    ? makeGroup('환경 분야','#0e7490',envList)+makeGroup('안전 분야','#1e6fb5',safeList)
+    : `<div style="font-size:12px;color:var(--muted);padding:4px">일정에 심사원을 등록하면 현황이 표시됩니다.</div>`;
+
+  el.innerHTML=html;
 }
 
 function renderCatList(){
@@ -636,6 +703,8 @@ function openAdd(dateStr, rangeEnd){
   document.getElementById('delBtn').style.display='none';
   document.getElementById('fEvtTitle').value='';
   document.getElementById('fNote').value='';
+  document.getElementById('fAuditorEnv').value='';
+  document.getElementById('fAuditorSafe').value='';
   const d=dateStr||fmt(curY,curM,TODAY.getDate());
   document.getElementById('fStart').value=d;
   document.getElementById('fEnd').value=rangeEnd||d;
@@ -652,6 +721,8 @@ function openEdit(id){
   document.getElementById('delBtn').style.display='';
   document.getElementById('fEvtTitle').value=ev.title;
   document.getElementById('fNote').value=ev.note||'';
+  document.getElementById('fAuditorEnv').value=(ev.auditorEnv||[]).join(', ');
+  document.getElementById('fAuditorSafe').value=(ev.auditorSafe||[]).join(', ');
   document.getElementById('fStart').value=ev.start;
   document.getElementById('fEnd').value=ev.end;
   renderCatPills();renderSitePills();
@@ -660,20 +731,28 @@ function openEdit(id){
 }
 function closeModal(){document.getElementById('overlay').classList.remove('open')}
 function overlayBg(e){if(e.target===document.getElementById('overlay'))closeModal()}
+
+// 쉼표로 구분된 입력 → 최대 N명 배열
+function parseAuditors(str,max){
+  return str.split(',').map(s=>s.trim()).filter(Boolean).slice(0,max);
+}
+
 function saveEvt(){
   const title=document.getElementById('fEvtTitle').value.trim();
   const start=document.getElementById('fStart').value;
   const end=document.getElementById('fEnd').value;
   const note=document.getElementById('fNote').value.trim();
+  const auditorEnv=parseAuditors(document.getElementById('fAuditorEnv').value,4);
+  const auditorSafe=parseAuditors(document.getElementById('fAuditorSafe').value,4);
   if(!title){document.getElementById('fEvtTitle').focus();toast('일정명을 입력하세요.');return}
   if(!start||!end){toast('날짜를 선택하세요.');return}
   if(start>end){toast('종료일이 시작일보다 빠릅니다.');return}
   if(editingId){
     const idx=EVTS.findIndex(e=>e.id===editingId);
-    if(idx>=0)EVTS[idx]={...EVTS[idx],title,cat:selCat,sites:selSites,start,end,note};
+    if(idx>=0)EVTS[idx]={...EVTS[idx],title,cat:selCat,sites:selSites,start,end,note,auditorEnv,auditorSafe};
     toast('일정이 수정되었습니다.');
   } else {
-    EVTS.push({id:uid(),title,cat:selCat,sites:selSites,start,end,note});
+    EVTS.push({id:uid(),title,cat:selCat,sites:selSites,start,end,note,auditorEnv,auditorSafe});
     toast('일정이 추가되었습니다.');
   }
   saveEvts();closeModal();renderAll();
