@@ -78,7 +78,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .cell-date{font-size:13px;font-weight:600;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cell-holiday{font-size:9px;color:var(--red);font-weight:500;text-align:right;max-width:56px;line-height:1.2}
 .cell-events{display:flex;flex-direction:column;gap:2px}
-.ev-bar{height:20px;border-radius:4px;font-size:11px;font-weight:600;display:flex;align-items:center;padding:0 6px;white-space:nowrap;overflow:hidden;cursor:pointer;transition:filter .1s;color:#fff;gap:4px}
+.ev-bar{height:20px;border-radius:4px;font-size:11px;font-weight:600;display:flex;align-items:center;padding:0 6px;overflow:hidden;cursor:pointer;transition:filter .1s;color:#fff;gap:3px}
 .ev-bar:hover{filter:brightness(1.1)}
 .ev-site-badge{font-size:9px;font-weight:700;opacity:.85;background:rgba(0,0,0,.18);border-radius:3px;padding:1px 4px;flex-shrink:0}
 .ev-bar.span-se{border-radius:4px}.ev-bar.span-s{border-radius:4px 0 0 4px;margin-right:-6px}
@@ -910,10 +910,33 @@ function buildGrid(year,month,bodyEl){
             badge.textContent=eSites.length>1?`${firstSite.label}+${eSites.length-1}`:firstSite.label;
             bar.appendChild(badge);
           }
-          const titleSpan=document.createElement('span');titleSpan.textContent=e.title;titleSpan.style.overflow='hidden';titleSpan.style.textOverflow='ellipsis';
+          const titleSpan=document.createElement('span');
+          titleSpan.textContent=e.title;
+          titleSpan.style.cssText='overflow:hidden;text-overflow:ellipsis;flex-shrink:1';
           bar.appendChild(titleSpan);
+
+          // 심사원 표시 (안전 / 환경)
+          const safeArr=toArr(e.auditorSafe);
+          const envArr=toArr(e.auditorEnv);
+          if(safeArr.length||envArr.length){
+            const audSpan=document.createElement('span');
+            audSpan.style.cssText='font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;margin-left:4px;background:rgba(0,0,0,.18);border-radius:3px;padding:1px 4px';
+            const parts=[];
+            if(safeArr.length) parts.push('안전:'+safeArr.join('·'));
+            if(envArr.length) parts.push('환경:'+envArr.join('·'));
+            audSpan.textContent=parts.join(' / ');
+            bar.appendChild(audSpan);
+          }
         }
-        bar.title=e.title+(toArr(e.sites).length?` [${toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`:'');
+
+        // 툴팁: 제목 + 사업장 + 심사원 전체
+        const safeArr=toArr(e.auditorSafe);
+        const envArr=toArr(e.auditorEnv);
+        let tipText=e.title;
+        if(toArr(e.sites).length) tipText+=` [${toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`;
+        if(safeArr.length) tipText+=`\n안전: ${safeArr.join(', ')}`;
+        if(envArr.length) tipText+=`\n환경: ${envArr.join(', ')}`;
+        bar.title=tipText;
         bar.addEventListener('click',ev=>{ev.stopPropagation();openEdit(e.id)});
         evWrap.appendChild(bar);
       });
