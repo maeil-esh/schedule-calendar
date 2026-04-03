@@ -264,6 +264,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       <button class="stab-btn active" id="stab-title" onclick="switchStab('title')">제목</button>
       <button class="stab-btn" id="stab-cat" onclick="switchStab('cat')">업무유형</button>
       <button class="stab-btn" id="stab-site" onclick="switchStab('site')">사업장</button>
+      <button class="stab-btn" id="stab-lock" onclick="switchStab('lock')">🔒 잠금</button>
     </div>
     <!-- 제목 패널 -->
     <div class="stab-panel active" id="spanel-title">
@@ -280,6 +281,15 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     <div class="stab-panel" id="spanel-site">
       <div id="masterSiteList"></div>
       <button class="master-add" onclick="addSite()">+ 사업장 추가</button>
+    </div>
+    <!-- 잠금 패널 -->
+    <div class="stab-panel" id="spanel-lock">
+      <div id="lockStatusBox" style="text-align:center;padding:20px 0">
+        <div id="lockIcon" style="font-size:48px;margin-bottom:12px"></div>
+        <div id="lockStatusText" style="font-size:15px;font-weight:600;margin-bottom:6px"></div>
+        <div id="lockStatusDesc" style="font-size:12px;color:var(--muted);margin-bottom:20px"></div>
+        <button id="lockToggleBtn" class="btn" style="font-size:14px;padding:10px 28px" onclick="toggleLock()"></button>
+      </div>
     </div>
     <div class="modal-ft" style="margin-top:16px">
       <button class="btn btn-primary" onclick="applySettings()">저장</button>
@@ -312,54 +322,46 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 <div class="toast" id="toast"></div>
 
 <script>
-// ── GOOGLE SHEETS API 설정 ──
+// ── GOOGLE SHEETS API ──
 const API_URL = 'https://script.google.com/macros/s/AKfycbzWfphYkr0O44up6y1V8hBz6WDWnNMEcPb-4L702iIBgX8lVmFn0XlbMkHIJQwQYfkR/exec';
 const USE_SHEETS = true;
 
-// ── LOCAL FALLBACK STORAGE ──
+// localStorage는 타이틀만 저장 (데이터는 Sheets가 단일 원천)
 const S={
   get(k){try{return localStorage.getItem(k)}catch{return null}},
   set(k,v){try{localStorage.setItem(k,v)}catch{}}
 };
 
-// ── API 함수 (fetch 방식) ──
-function apiGet(){
+// JSONP 요청 (읽기/쓰기 공통)
+function jsonp(params){
   return new Promise((resolve,reject)=>{
-    // 방법1: fetch (CORS 허용 시)
-    fetch(API_URL+'?action=getAll')
-      .then(r=>r.json())
-      .then(resolve)
-      .catch(()=>{
-        // 방법2: JSONP 폴백
-        const cbName='_cb'+Date.now();
-        const script=document.createElement('script');
-        const timeout=setTimeout(()=>{
-          delete window[cbName];
-          if(document.body.contains(script)) document.body.removeChild(script);
-          reject(new Error('timeout'));
-        },10000);
-        window[cbName]=function(data){
-          clearTimeout(timeout);
-          delete window[cbName];
-          if(document.body.contains(script)) document.body.removeChild(script);
-          resolve(data);
-        };
-        script.src=API_URL+'?action=getAll&callback='+cbName;
-        script.onerror=()=>{clearTimeout(timeout);reject(new Error('script error'))};
-        document.body.appendChild(script);
-      });
+    const cbName='_j'+Date.now()+Math.random().toString(36).slice(2,5);
+    const script=document.createElement('script');
+    const timeout=setTimeout(()=>{
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('timeout'));
+    },15000);
+    window[cbName]=function(data){
+      clearTimeout(timeout);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+    params.callback=cbName;
+    const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(typeof v==='object'?JSON.stringify(v):String(v))).join('&');
+    script.src=API_URL+'?'+qs;
+    script.onerror=()=>{clearTimeout(timeout);delete window[cbName];reject(new Error('error'))};
+    document.body.appendChild(script);
   });
 }
-async function apiPost(action,payload){
-  try{
-    const params=new URLSearchParams({action});
-    Object.entries(payload).forEach(([k,v])=>{
-      params.append(k, typeof v==='object'?JSON.stringify(v):String(v));
-    });
-    // fetch no-cors로 저장 (응답 확인 불가하지만 저장은 됨)
-    await fetch(API_URL+'?'+params.toString(),{method:'GET',mode:'no-cors'});
-  }catch{}
-}
+
+function apiGet(){ return jsonp({action:'getAll'}); }
+
+async function apiSaveEvts(){ return jsonp({action:'saveEvts',data:EVTS}); }
+async function apiSaveCats(){ return jsonp({action:'saveCats',data:CATS.filter(c=>!c.fixed)}); }
+async function apiSaveSites(){ return jsonp({action:'saveSites',data:SITES.filter(s=>!s.fixed)}); }
+async function apiSaveTitle(v){ return jsonp({action:'saveTitle',value:v}); }
 
 // ── 로딩 표시 ──
 function showLoading(show){
@@ -370,6 +372,29 @@ function showLoading(show){
     document.body.appendChild(el);
   }
   el.style.opacity=show?'1':'0';
+}
+
+// Sheets에서 전체 데이터 로드 후 화면 갱신
+async function loadFromSheets(){
+  showLoading(true);
+  try{
+    const d=await apiGet();
+    if(!d) return;
+    const normalize=(arr)=>arr.map(x=>({...x,label:x.label||x.name||x.id,dot:x.dot||x.color||'#888'}));
+    if(d.evts) EVTS=d.evts;
+    if(d.cats&&d.cats.length>0) CATS=[DCATS[0],...normalize(d.cats)];
+    if(d.sites&&d.sites.length>0) SITES=[DSITES[0],...normalize(d.sites)];
+    if(d.title){
+      document.getElementById('logoTitle').textContent=d.title;
+      document.title=d.title;
+      S.set('cal_title',d.title);
+    }
+    renderAll();
+  }catch(err){
+    console.error('Sheets 로드 실패:',err);
+    toast('⚠️ 서버 연결 실패. 잠시 후 새로고침 해주세요.');
+  }
+  showLoading(false);
 }
 
 // ── HOLIDAYS ──
@@ -398,9 +423,8 @@ const DCATS=[
   {id:'cat-etc',label:'기타',dot:'#6d28d9'},
 ];
 let CATS=(()=>{try{const s=S.get('cal_cats');return s?JSON.parse(s):DCATS}catch{return DCATS}})();
-function saveCats(){
-  S.set('cal_cats',JSON.stringify(CATS)); // 로컬 캐시
-  if(USE_SHEETS) apiPost('saveCats',{data:CATS.filter(c=>!c.fixed)});
+async function saveCats(){
+  if(USE_SHEETS){ await apiSaveCats(); await loadFromSheets(); }
 }
 
 // ── SITES (사업장) ──
@@ -415,9 +439,8 @@ const DSITES=[
   {id:'site-sh',label:'상하',dot:'#15803d'},
 ];
 let SITES=(()=>{try{const s=S.get('cal_sites');return s?JSON.parse(s):DSITES}catch{return DSITES}})();
-function saveSites(){
-  S.set('cal_sites',JSON.stringify(SITES));
-  if(USE_SHEETS) apiPost('saveSites',{data:SITES.filter(s=>!s.fixed)});
+async function saveSites(){
+  if(USE_SHEETS){ await apiSaveSites(); await loadFromSheets(); }
 }
 
 // ── EVENTS ──
@@ -432,9 +455,8 @@ const DEVTS=[
   {id:'e8',title:'상하 교육',cat:'cat-edu',sites:['site-sh'],start:'2026-05-19',end:'2026-05-21',note:''},
 ];
 let EVTS=(()=>{try{const s=S.get('cal_evts');return s?JSON.parse(s):DEVTS}catch{return DEVTS}})();
-function saveEvts(){
-  S.set('cal_evts',JSON.stringify(EVTS));
-  if(USE_SHEETS) apiPost('saveEvts',{data:EVTS});
+async function saveEvts(){
+  if(USE_SHEETS){ await apiSaveEvts(); await loadFromSheets(); }
 }
 
 // ── STATE ──
@@ -601,16 +623,51 @@ function applySettings(){
     document.getElementById('logoTitle').textContent=v;
     document.title=v;
     S.set('cal_title',v);
-    if(USE_SHEETS) apiPost('saveTitle',{value:v});
+    if(USE_SHEETS) apiSaveTitle(v);
   }
   closeSettings();
   toast('기준정보가 저장되었습니다.');
 }
 function switchStab(tab){
   settingsTab=tab;
-  ['title','cat','site'].forEach(t=>{
-    document.getElementById('stab-'+t).classList.toggle('active',t===tab);
-    document.getElementById('spanel-'+t).classList.toggle('active',t===tab);
+  ['title','cat','site','lock'].forEach(t=>{
+    const btn=document.getElementById('stab-'+t);
+    const panel=document.getElementById('spanel-'+t);
+    if(btn) btn.classList.toggle('active',t===tab);
+    if(panel) panel.classList.toggle('active',t===tab);
+  });
+  if(tab==='lock') renderLockPanel();
+}
+
+// ── 잠금 기능 ──
+let IS_LOCKED = S.get('cal_locked')==='true';
+
+function renderLockPanel(){
+  document.getElementById('lockIcon').textContent = IS_LOCKED ? '🔒' : '🔓';
+  document.getElementById('lockStatusText').textContent = IS_LOCKED ? '현재 입력이 잠겨 있습니다' : '현재 입력이 활성화되어 있습니다';
+  document.getElementById('lockStatusDesc').textContent = IS_LOCKED
+    ? '일정 추가/수정/삭제가 불가합니다. 잠금 해제하려면 아래 버튼을 누르세요.'
+    : '누구나 일정을 추가하고 수정할 수 있습니다. 잠금하려면 아래 버튼을 누르세요.';
+  const btn = document.getElementById('lockToggleBtn');
+  btn.textContent = IS_LOCKED ? '🔓 잠금 해제' : '🔒 잠금';
+  btn.className = 'btn ' + (IS_LOCKED ? 'btn-primary' : 'btn-danger');
+}
+
+function toggleLock(){
+  IS_LOCKED = !IS_LOCKED;
+  S.set('cal_locked', IS_LOCKED ? 'true' : 'false');
+  renderLockPanel();
+  applyLock();
+  toast(IS_LOCKED ? '🔒 입력이 잠겼습니다.' : '🔓 입력이 활성화되었습니다.');
+}
+
+function applyLock(){
+  // + 일정 추가 버튼 숨김/표시
+  const addBtn = document.querySelector('button[onclick="openAdd(null,null)"]');
+  if(addBtn) addBtn.style.display = IS_LOCKED ? 'none' : '';
+  // 달력 셀 드래그 커서 변경
+  document.querySelectorAll('.cal-cell').forEach(c=>{
+    c.style.cursor = IS_LOCKED ? 'default' : 'crosshair';
   });
 }
 
@@ -720,6 +777,7 @@ function renderSitePills(){
 }
 
 function openAdd(dateStr, rangeEnd){
+  if(IS_LOCKED){toast('🔒 현재 입력이 잠겨 있습니다.');return;}
   editingId=null;
   document.getElementById('mTitle').textContent='일정 추가';
   document.getElementById('delBtn').style.display='none';
@@ -737,6 +795,7 @@ function openAdd(dateStr, rangeEnd){
   setTimeout(()=>document.getElementById('fEvtTitle').focus(),80);
 }
 function openEdit(id){
+  if(IS_LOCKED){toast('🔒 현재 입력이 잠겨 있습니다.');return;}
   const ev=EVTS.find(x=>x.id===id);if(!ev)return;
   editingId=id;selCat=ev.cat;selSites=toArr(ev.sites);
   document.getElementById('mTitle').textContent='일정 수정';
@@ -813,6 +872,7 @@ function showDetail(id,ev){
 function attachDrag(bodyEl){
   let ds=null,de=null,dragging=false;
   bodyEl.addEventListener('mousedown',e=>{
+    if(IS_LOCKED) return;
     const cell=e.target.closest('.cal-cell');
     if(!cell||!cell.dataset.date)return;
     if(e.target.closest('.ev-bar'))return;
@@ -1062,35 +1122,15 @@ function renderAll(){
 
 // ── INIT ──
 async function init(){
-  // 혹시 localStorage에 깨진 데이터가 있으면 초기화
-  try{
-    const testEvts=S.get('cal_evts');
-    if(testEvts) JSON.parse(testEvts); // 파싱 실패 시 catch로
-  }catch{
-    S.set('cal_evts','');
-    S.set('cal_cats','');
-    S.set('cal_sites','');
-    EVTS=DEVTS; CATS=DCATS; SITES=DSITES;
-  }
-
-  // URL 파라미터 처리
-  try{
-    const p=new URLSearchParams(location.search).get('data');
-    if(p){
-      const parsed=JSON.parse(decodeURIComponent(atob(p)));
-      if(parsed.evts)EVTS=parsed.evts;
-      if(parsed.cats)CATS=parsed.cats;
-      if(parsed.sites)SITES=parsed.sites;
-      saveEvts();saveCats();saveSites();
-    }
-  }catch{}
-
-  // 로컬 타이틀 적용
   const t=S.get('cal_title');
   if(t){document.getElementById('logoTitle').textContent=t;document.title=t;}
-
-  // 즉시 렌더링
-  renderAll();
+  IS_LOCKED = S.get('cal_locked')==='true';
+  if(USE_SHEETS){
+    await loadFromSheets();
+  } else {
+    renderAll();
+  }
+  applyLock();
 }
 init();
 
