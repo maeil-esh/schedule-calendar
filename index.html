@@ -235,12 +235,12 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 
     <!-- 심사원 입력 -->
     <div class="fg">
-      <label>심사원 — 환경 분야 (최대 4명, 쉼표로 구분)</label>
-      <input class="fi2" id="fAuditorEnv" maxlength="80" placeholder="예) 홍길동, 김철수">
-    </div>
-    <div class="fg">
       <label>심사원 — 안전 분야 (최대 4명, 쉼표로 구분)</label>
       <input class="fi2" id="fAuditorSafe" maxlength="80" placeholder="예) 이영희, 박민준">
+    </div>
+    <div class="fg">
+      <label>심사원 — 환경 분야 (최대 4명, 쉼표로 구분)</label>
+      <input class="fi2" id="fAuditorEnv" maxlength="80" placeholder="예) 홍길동, 김철수">
     </div>
 
     <div class="modal-ft">
@@ -510,7 +510,7 @@ function renderAuditorStats(){
   }
 
   const html=(envList.length||safeList.length)
-    ? makeGroup('환경 분야','#0e7490',envList)+makeGroup('안전 분야','#1e6fb5',safeList)
+    ? makeGroup('안전 분야','#1e6fb5',safeList)+makeGroup('환경 분야','#0e7490',envList)
     : `<div style="font-size:12px;color:var(--muted);padding:4px">일정에 심사원을 등록하면 현황이 표시됩니다.</div>`;
 
   el.innerHTML=html;
@@ -531,7 +531,7 @@ function renderCatList(){
 function renderSiteList(){
   const el=document.getElementById('siteList');el.innerHTML='';
   SITES.forEach(site=>{
-    const cnt=site.id==='site-all'?EVTS.length:EVTS.filter(e=>(e.sites||[]).includes(site.id)).length;
+    const cnt=site.id==='site-all'?EVTS.length:EVTS.filter(e=>toArr(e.sites).includes(site.id)).length;
     const item=document.createElement('div');
     item.className='fi-item'+(activeSite===site.id?' active':'');
     item.innerHTML=`<div class="fi-dot" style="background:${site.dot}"></div><span class="fi-label">${site.label}</span><span class="fi-count">${cnt}</span>`;
@@ -692,9 +692,10 @@ function renderSitePills(){
   SITES.filter(s=>!s.fixed).forEach(site=>{
     const btn=document.createElement('button');
     btn.className='pill';btn.textContent=site.label;btn.dataset.id=site.id;
-    const on=selSites.includes(site.id);
+    const on=toArr(selSites).includes(site.id);
     btn.style.borderColor=site.dot;btn.style.color=on?'#fff':site.dot;btn.style.background=on?site.dot:'transparent';
     btn.onclick=()=>{
+      selSites=toArr(selSites);
       if(selSites.includes(site.id)) selSites=selSites.filter(x=>x!==site.id);
       else selSites.push(site.id);
       renderSitePills();
@@ -722,7 +723,7 @@ function openAdd(dateStr, rangeEnd){
 }
 function openEdit(id){
   const ev=EVTS.find(x=>x.id===id);if(!ev)return;
-  editingId=id;selCat=ev.cat;selSites=[...(ev.sites||[])];
+  editingId=id;selCat=ev.cat;selSites=toArr(ev.sites);
   document.getElementById('mTitle').textContent='일정 수정';
   document.getElementById('delBtn').style.display='';
   document.getElementById('fEvtTitle').value=ev.title;
@@ -821,11 +822,22 @@ function attachDrag(bodyEl){
 function highlight(body,s,e){const lo=s<e?s:e,hi=s<e?e:s;body.querySelectorAll('.cal-cell').forEach(c=>{const d=c.dataset.date;c.classList.toggle('dragging',!!(d&&d>=lo&&d<=hi))})}
 function clearHL(body){body.querySelectorAll('.cal-cell').forEach(c=>c.classList.remove('dragging'))}
 
+// ── 안전한 배열 변환 ──
+function toArr(v){
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  if(typeof v==='string'){
+    try{const p=JSON.parse(v);if(Array.isArray(p))return p;}catch{}
+    return v.split(',').map(s=>s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 // ── FILTER EVENTS ──
 function getFiltered(){
   return EVTS.filter(e=>{
     const catOk=activeCat==='all'||e.cat===activeCat;
-    const siteOk=activeSite==='site-all'||(e.sites||[]).includes(activeSite);
+    const siteOk=activeSite==='site-all'||toArr(e.sites).includes(activeSite);
     return catOk&&siteOk;
   });
 }
@@ -891,17 +903,17 @@ function buildGrid(year,month,bodyEl){
         bar.style.background=cat?.dot||'#888';
 
         if(isS){
-          // 사업장 뱃지 (첫 번째만)
-          const firstSite=SITES.find(s=>(e.sites||[]).includes(s.id)&&!s.fixed);
-          if(firstSite&&(e.sites||[]).length>0){
+          const eSites=toArr(e.sites);
+          const firstSite=SITES.find(s=>eSites.includes(s.id)&&!s.fixed);
+          if(firstSite&&eSites.length>0){
             const badge=document.createElement('span');badge.className='ev-site-badge';
-            badge.textContent=(e.sites||[]).length>1?`${firstSite.label}+${(e.sites||[]).length-1}`:firstSite.label;
+            badge.textContent=eSites.length>1?`${firstSite.label}+${eSites.length-1}`:firstSite.label;
             bar.appendChild(badge);
           }
           const titleSpan=document.createElement('span');titleSpan.textContent=e.title;titleSpan.style.overflow='hidden';titleSpan.style.textOverflow='ellipsis';
           bar.appendChild(titleSpan);
         }
-        bar.title=e.title+(e.sites?.length?` [${(e.sites||[]).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`:'');
+        bar.title=e.title+(toArr(e.sites).length?` [${toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`:'');
         bar.addEventListener('click',ev=>{ev.stopPropagation();openEdit(e.id)});
         evWrap.appendChild(bar);
       });
@@ -957,7 +969,7 @@ function renderList(){
   if(!filtered.length){wrap.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:14px">이번 달 일정이 없습니다.</div>'}
   else filtered.forEach(e=>{
     const cat=CATS.find(c=>c.id===e.cat);
-    const siteObjs=(e.sites||[]).map(sid=>SITES.find(s=>s.id===sid)).filter(Boolean);
+    const siteObjs=toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)).filter(Boolean);
     const row=document.createElement('div');row.className='list-row';
     const siteBadgesHTML=siteObjs.map(s=>`<span class="list-badge" style="background:${s.dot}">${s.label}</span>`).join('');
     const catBadgeHTML=cat&&!cat.fixed?`<span class="list-badge" style="background:${cat.dot}">${cat.label}</span>`:'';
