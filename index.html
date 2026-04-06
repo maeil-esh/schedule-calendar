@@ -856,7 +856,7 @@ function goToday(){curY=TODAY.getFullYear();curM=TODAY.getMonth();miniY=curY;min
 
 function shareCalendar(){
   const data=btoa(encodeURIComponent(JSON.stringify({evts:EVTS,cats:CATS,sites:SITES})));
-  const url=location.href.split('?')[0]+'?data='+data;
+  const url='https://maeil-esh.github.io/schedule-calendar'+'?data='+data;
   document.getElementById('shareUrl').value=url;
   navigator.clipboard?.writeText(url).catch(()=>{});
   toast('🔗 공유 링크가 복사되었습니다!');
