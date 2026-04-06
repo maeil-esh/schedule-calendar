@@ -855,8 +855,7 @@ function nextM(){curM++;if(curM>11){curM=0;curY++}renderAll()}
 function goToday(){curY=TODAY.getFullYear();curM=TODAY.getMonth();miniY=curY;miniM=curM;renderAll()}
 
 function shareCalendar(){
-  const data=btoa(encodeURIComponent(JSON.stringify({evts:EVTS,cats:CATS,sites:SITES})));
-  const url='https://maeil-esh.github.io/schedule-calendar'+'?data='+data;
+  const url='https://maeil-esh.github.io/schedule-calendar';
   document.getElementById('shareUrl').value=url;
   navigator.clipboard?.writeText(url).catch(()=>{});
   toast('🔗 공유 링크가 복사되었습니다!');
