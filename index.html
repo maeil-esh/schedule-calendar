@@ -360,55 +360,45 @@ function toArr(v){if(!v)return[];if(Array.isArray(v))return v;if(typeof v==='str
 // ── DRAG & DROP 엔진 ──
 // ══════════════════════════════════════════════════════════
 const ghost=document.getElementById('dnd-ghost');
-const DND={active:false,evId:null,color:'#888',title:'',durDays:0,overCell:null,moved:false};
+const DND={
+  pending:false,   // mousedown 눌린 상태 (드래그 시작 대기)
+  active:false,    // 실제 드래그 진행 중 (5px 이상 움직인 후)
+  evId:null,color:'#888',title:'',durDays:0,overCell:null,
+  startX:0,startY:0  // mousedown 좌표 (클릭/드래그 판별용)
+};
+const DND_THRESHOLD=5; // 이 픽셀 이상 움직여야 드래그로 인식
 
-function dndBegin(evId,color,title){
-  if(IS_LOCKED)return false;
-  const ev=EVTS.find(x=>x.id===evId);
-  if(!ev)return false;
-  DND.active=true; DND.evId=evId; DND.color=color; DND.title=title;
-  DND.durDays=Math.round((pDate(ev.end)-pDate(ev.start))/86400000);
-  DND.overCell=null; DND.moved=false;
-  ghost.textContent=title;
-  ghost.style.background=color;
-  ghost.style.display='block';
-  document.querySelectorAll(`.ev-bar[data-evid="${evId}"]`).forEach(b=>b.classList.add('dnd-dragging'));
-  return true;
-}
-function dndEnd(targetDate){
-  // 정리
+function dndCleanup(){
   ghost.style.display='none';
   if(DND.overCell){DND.overCell.classList.remove('dnd-over');DND.overCell=null}
   document.querySelectorAll('.ev-bar.dnd-dragging').forEach(b=>b.classList.remove('dnd-dragging'));
+  DND.pending=false; DND.active=false;
+}
 
-  if(!DND.active)return;
-  const wasActive=DND.active;
-  DND.active=false;
-
-  if(!wasActive||!targetDate){renderAll();return}
-
-  const ev=EVTS.find(x=>x.id===DND.evId);
-  if(!ev){renderAll();return}
-
-  const newStart=pDate(targetDate);
-  const newEnd=new Date(newStart);
-  newEnd.setDate(newEnd.getDate()+DND.durDays);
-  const ns=fmt(newStart.getFullYear(),newStart.getMonth(),newStart.getDate());
-  const ne=fmt(newEnd.getFullYear(),newEnd.getMonth(),newEnd.getDate());
-
-  if(ns===ev.start){toast('같은 날짜입니다.');renderAll();return}
-  ev.start=ns; ev.end=ne;
-  toast(`"${ev.title}" → ${ns} 이동 완료`);
-  saveEvts(); // Sheets 저장 + renderAll()
+function dndActivate(){
+  // pending → active: 고스트 표시 + 원본 바 흐리게
+  DND.active=true;
+  ghost.textContent=DND.title;
+  ghost.style.background=DND.color;
+  ghost.style.display='block';
+  document.querySelectorAll(`.ev-bar[data-evid="${DND.evId}"]`).forEach(b=>b.classList.add('dnd-dragging'));
 }
 
 // 전역 mousemove
 document.addEventListener('mousemove',e=>{
-  if(!DND.active)return;
+  if(!DND.pending&&!DND.active)return;
+
+  // pending 상태에서 threshold 초과 시 드래그 활성화
+  if(DND.pending&&!DND.active){
+    const dx=Math.abs(e.clientX-DND.startX);
+    const dy=Math.abs(e.clientY-DND.startY);
+    if(dx>DND_THRESHOLD||dy>DND_THRESHOLD) dndActivate();
+    else return;
+  }
+
   ghost.style.left=e.clientX+'px';
   ghost.style.top=e.clientY+'px';
-  DND.moved=true;
-  // ghost를 잠깐 숨겨서 아래 요소 탐색
+
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
@@ -422,23 +412,43 @@ document.addEventListener('mousemove',e=>{
 
 // 전역 mouseup
 document.addEventListener('mouseup',e=>{
-  if(!DND.active)return;
-  e.stopPropagation();
+  if(!DND.pending&&!DND.active)return;
+
+  if(!DND.active){
+    // threshold 미만 → 클릭으로 처리, openEdit 직접 호출
+    const targetId=DND.evId;
+    dndCleanup();
+    openEdit(targetId);
+    return;
+  }
+
+  // 실제 드래그 종료
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
   const cell=el?el.closest('.cal-cell'):null;
   const targetDate=cell&&cell.dataset.date?cell.dataset.date:null;
-  if(!DND.moved){
-    // 클릭으로 처리 (openEdit은 bar click에서 처리)
-    DND.active=false;
-    ghost.style.display='none';
-    if(DND.overCell){DND.overCell.classList.remove('dnd-over');DND.overCell=null}
-    document.querySelectorAll('.ev-bar.dnd-dragging').forEach(b=>b.classList.remove('dnd-dragging'));
-    return;
-  }
-  dndEnd(targetDate);
-  if(!targetDate)toast('이동 취소되었습니다.');
+
+  // 정리 먼저
+  const evId=DND.evId;
+  const durDays=DND.durDays;
+  dndCleanup();
+
+  if(!targetDate){toast('이동 취소되었습니다.');return}
+
+  const ev=EVTS.find(x=>x.id===evId);
+  if(!ev)return;
+
+  const newStart=pDate(targetDate);
+  const newEnd=new Date(newStart);
+  newEnd.setDate(newEnd.getDate()+durDays);
+  const ns=fmt(newStart.getFullYear(),newStart.getMonth(),newStart.getDate());
+  const ne=fmt(newEnd.getFullYear(),newEnd.getMonth(),newEnd.getDate());
+
+  if(ns===ev.start){toast('같은 날짜입니다.');return}
+  ev.start=ns; ev.end=ne;
+  toast(`"${ev.title}" → ${ns} 이동 완료`);
+  saveEvts();
 });
 // ══════════════════════════════════════════════════════════
 
@@ -772,13 +782,17 @@ function buildGrid(year,month,bodyEl){
           if(IS_LOCKED)return;
           ev.stopPropagation();
           ev.preventDefault();
-          dndBegin(e.id,catColor,e.title);
+          // pending 상태로 전환 (아직 드래그 시작 아님)
+          const evObj=EVTS.find(x=>x.id===e.id);
+          if(!evObj)return;
+          DND.pending=true; DND.active=false;
+          DND.evId=e.id; DND.color=catColor; DND.title=e.title;
+          DND.durDays=Math.round((pDate(evObj.end)-pDate(evObj.start))/86400000);
+          DND.overCell=null;
+          DND.startX=ev.clientX; DND.startY=ev.clientY;
         });
-        // 클릭(=드래그 없이 mousedown+mouseup) → 수정 모달
-        bar.addEventListener('click',ev=>{
-          ev.stopPropagation();
-          if(!DND.moved)openEdit(e.id);
-        });
+        // click 이벤트는 mouseup에서 처리하므로 여기서는 전파만 막음
+        bar.addEventListener('click',ev=>{ev.stopPropagation()});
 
         evWrap.appendChild(bar);
       });
@@ -876,7 +890,7 @@ init();
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(DND.active){DND.active=false;ghost.style.display='none';if(DND.overCell){DND.overCell.classList.remove('dnd-over');DND.overCell=null}document.querySelectorAll('.ev-bar.dnd-dragging').forEach(b=>b.classList.remove('dnd-dragging'));toast('드래그 취소');renderAll();return}
+    if(DND.pending||DND.active){dndCleanup();toast('드래그 취소');return}
     closeModal();closeSettings();
   }
   if(!document.getElementById('overlay').classList.contains('open')&&!document.getElementById('settingsOverlay').classList.contains('open')){
