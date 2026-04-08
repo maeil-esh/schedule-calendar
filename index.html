@@ -66,6 +66,30 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .dnd-hint{font-size:11px;color:var(--muted);padding:4px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;white-space:nowrap}
 /* ── END DND ── */
 
+/* ── 공지사항 배너 ── */
+.notice-bar{
+  background:linear-gradient(135deg,#fffbe6 0%,#fff8dc 100%);
+  border:1px solid #ffe58f;
+  border-left:4px solid #faad14;
+  border-radius:8px;
+  padding:10px 16px;
+  font-size:13px;
+  color:#7c5e00;
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  box-shadow:0 1px 4px rgba(250,173,20,.12);
+  line-height:1.6;
+  word-break:break-all;
+  animation:noticeFadeIn .3s ease;
+}
+@keyframes noticeFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.notice-bar-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.notice-bar-text{flex:1;white-space:pre-wrap}
+.notice-bar-close{background:none;border:none;cursor:pointer;color:#c8a800;font-size:16px;padding:0 2px;line-height:1;opacity:.7;flex-shrink:0;margin-top:1px}
+.notice-bar-close:hover{opacity:1}
+/* ── END 공지사항 ── */
+
 .cell-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px}
 .cell-date{font-size:13px;font-weight:600;width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cell-holiday{font-size:9px;color:var(--red);font-weight:500;text-align:right;max-width:56px;line-height:1.2}
@@ -97,7 +121,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .pill-group{display:flex;flex-wrap:wrap;gap:6px}
 .pill{padding:6px 13px;border-radius:20px;border:2px solid var(--border);cursor:pointer;font-size:12px;font-weight:600;transition:all .12s;font-family:inherit;background:none}
 .modal-ft{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
-.settings-modal{width:520px}
+.settings-modal{width:540px}
 .stab{display:flex;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px;margin-bottom:18px}
 .stab-btn{flex:1;padding:6px;font-size:12px;font-weight:600;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--muted);font-family:inherit;transition:all .12s}
 .stab-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -120,6 +144,14 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .auditor-bar-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .3s}
 .toast{position:fixed;bottom:24px;right:24px;background:#1a1d23;color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:500;z-index:2000;opacity:0;transform:translateY(8px);transition:all .22s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
+
+/* 공지 탭 textarea */
+.notice-textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);transition:border-color .15s;resize:vertical;line-height:1.7;min-height:100px}
+.notice-textarea:focus{outline:none;border-color:#faad14}
+.notice-char-row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.notice-char-count{font-size:11px;color:var(--muted)}
+.notice-preview{background:linear-gradient(135deg,#fffbe6,#fff8dc);border:1px solid #ffe58f;border-left:4px solid #faad14;border-radius:8px;padding:10px 14px;font-size:12px;color:#7c5e00;margin-top:10px;line-height:1.6;white-space:pre-wrap;word-break:break-all;display:none}
+.notice-preview-label{font-size:10px;font-weight:700;color:#faad14;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -173,6 +205,14 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       </div>
       <div class="dnd-hint" id="dndHint">✦ 일정 바를 날짜에 드래그하면 이동</div>
     </div>
+
+    <!-- ★ 공지사항 배너 -->
+    <div id="noticeBar" class="notice-bar" style="display:none">
+      <span class="notice-bar-icon">📢</span>
+      <span class="notice-bar-text" id="noticeBarText"></span>
+      <button class="notice-bar-close" onclick="hideNoticeBar()" title="닫기">✕</button>
+    </div>
+
     <div id="calContainer"></div>
   </main>
 </div>
@@ -216,23 +256,56 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
       <button class="modal-close" onclick="closeSettings()">✕</button>
     </div>
     <div class="stab">
-      <button class="stab-btn active" id="stab-title" onclick="switchStab('title')">제목</button>
-      <button class="stab-btn" id="stab-cat" onclick="switchStab('cat')">업무유형</button>
-      <button class="stab-btn" id="stab-site" onclick="switchStab('site')">사업장</button>
-      <button class="stab-btn" id="stab-lock" onclick="switchStab('lock')">🔒 잠금</button>
+      <button class="stab-btn active" id="stab-title"  onclick="switchStab('title')">제목</button>
+      <button class="stab-btn"        id="stab-notice" onclick="switchStab('notice')">📢 공지</button>
+      <button class="stab-btn"        id="stab-cat"    onclick="switchStab('cat')">업무유형</button>
+      <button class="stab-btn"        id="stab-site"   onclick="switchStab('site')">사업장</button>
+      <button class="stab-btn"        id="stab-lock"   onclick="switchStab('lock')">🔒 잠금</button>
     </div>
+
+    <!-- 제목 패널 -->
     <div class="stab-panel active" id="spanel-title">
       <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">캘린더 상단에 표시되는 제목을 입력하세요.</div>
       <input class="fi2" id="titleInput" maxlength="40" placeholder="예) 매일유업 안전점검 일정" style="font-size:15px;font-weight:600;padding:10px 14px">
     </div>
+
+    <!-- ★ 공지사항 패널 -->
+    <div class="stab-panel" id="spanel-notice">
+      <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">
+        캘린더 상단에 표시할 공지사항을 입력하세요.<br>
+        비워두면 배너가 숨겨집니다. 최대 300자.
+      </div>
+      <textarea
+        class="notice-textarea"
+        id="noticeInput"
+        maxlength="300"
+        placeholder="예) 5월 정기점검 일정이 확정되었습니다. 참고 바랍니다."
+        oninput="onNoticeInput()"
+      ></textarea>
+      <div class="notice-char-row">
+        <button class="btn btn-ghost btn-sm" onclick="clearNotice()">초기화</button>
+        <span class="notice-char-count"><span id="noticeCharCount">0</span> / 300</span>
+      </div>
+      <!-- 미리보기 -->
+      <div id="noticePreviewWrap" class="notice-preview" style="display:none">
+        <div class="notice-preview-label">📢 미리보기</div>
+        <span id="noticePreviewText"></span>
+      </div>
+    </div>
+
+    <!-- 업무유형 패널 -->
     <div class="stab-panel" id="spanel-cat">
       <div id="masterCatList"></div>
       <button class="master-add" onclick="addCat()">+ 업무유형 추가</button>
     </div>
+
+    <!-- 사업장 패널 -->
     <div class="stab-panel" id="spanel-site">
       <div id="masterSiteList"></div>
       <button class="master-add" onclick="addSite()">+ 사업장 추가</button>
     </div>
+
+    <!-- 잠금 패널 -->
     <div class="stab-panel" id="spanel-lock">
       <div id="lockStatusBox" style="text-align:center;padding:20px 0">
         <div id="lockIcon" style="font-size:48px;margin-bottom:12px"></div>
@@ -241,6 +314,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
         <button id="lockToggleBtn" class="btn" style="font-size:14px;padding:10px 28px" onclick="toggleLock()"></button>
       </div>
     </div>
+
     <div class="modal-ft" style="margin-top:16px">
       <button class="btn btn-primary" onclick="applySettings()">저장</button>
     </div>
@@ -292,6 +366,7 @@ async function apiSaveEvts(){return jsonp({action:'saveEvts',data:EVTS})}
 async function apiSaveCats(){return jsonp({action:'saveCats',data:CATS.filter(c=>!c.fixed)})}
 async function apiSaveSites(){return jsonp({action:'saveSites',data:SITES.filter(s=>!s.fixed)})}
 async function apiSaveTitle(v){return jsonp({action:'saveTitle',value:v})}
+async function apiSaveNotice(v){return jsonp({action:'saveNotice',value:v})}  // ★ 공지 API
 
 function showLoading(show){
   let el=document.getElementById('loadingBar');
@@ -308,6 +383,8 @@ async function loadFromSheets(){
     if(d.cats&&d.cats.length>0)CATS=[DCATS[0],...normalize(d.cats)];
     if(d.sites&&d.sites.length>0)SITES=[DSITES[0],...normalize(d.sites)];
     if(d.title){document.getElementById('logoTitle').textContent=d.title;document.title=d.title;S.set('cal_title',d.title)}
+    // ★ 공지사항 로드
+    if(typeof d.notice!=='undefined'){applyNotice(d.notice);S.set('cal_notice',d.notice)}
     renderAll();
   }catch(err){console.error('Sheets 로드 실패:',err);toast('⚠️ 서버 연결 실패. 잠시 후 새로고침 해주세요.')}
   showLoading(false);
@@ -357,16 +434,55 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 function toArr(v){if(!v)return[];if(Array.isArray(v))return v;if(typeof v==='string'){try{const p=JSON.parse(v);if(Array.isArray(p))return p}catch{}return v.split(',').map(s=>s.trim()).filter(Boolean)}return[]}
 
 // ══════════════════════════════════════════════════════════
+// ── 공지사항 ──
+// ══════════════════════════════════════════════════════════
+let noticeHiddenByUser=false; // 사용자가 ✕ 눌러 닫은 경우
+
+function applyNotice(text){
+  const bar=document.getElementById('noticeBar');
+  const textEl=document.getElementById('noticeBarText');
+  if(!bar||!textEl)return;
+  const trimmed=(text||'').trim();
+  textEl.textContent=trimmed;
+  if(trimmed&&!noticeHiddenByUser){bar.style.display='flex'}
+  else{bar.style.display='none'}
+}
+function hideNoticeBar(){
+  noticeHiddenByUser=true;
+  document.getElementById('noticeBar').style.display='none';
+}
+
+// 공지 탭 - 입력 핸들러
+function onNoticeInput(){
+  const val=document.getElementById('noticeInput').value;
+  document.getElementById('noticeCharCount').textContent=val.length;
+  const preview=document.getElementById('noticePreviewWrap');
+  const previewText=document.getElementById('noticePreviewText');
+  if(val.trim()){
+    preview.style.display='block';
+    previewText.textContent=val.trim();
+  }else{
+    preview.style.display='none';
+  }
+}
+function clearNotice(){
+  document.getElementById('noticeInput').value='';
+  document.getElementById('noticeCharCount').textContent='0';
+  document.getElementById('noticePreviewWrap').style.display='none';
+}
+// ══════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════
 // ── DRAG & DROP 엔진 ──
 // ══════════════════════════════════════════════════════════
 const ghost=document.getElementById('dnd-ghost');
 const DND={
-  pending:false,   // mousedown 눌린 상태 (드래그 시작 대기)
-  active:false,    // 실제 드래그 진행 중 (5px 이상 움직인 후)
+  pending:false,
+  active:false,
   evId:null,color:'#888',title:'',durDays:0,overCell:null,
-  startX:0,startY:0  // mousedown 좌표 (클릭/드래그 판별용)
+  startX:0,startY:0
 };
-const DND_THRESHOLD=5; // 이 픽셀 이상 움직여야 드래그로 인식
+const DND_THRESHOLD=5;
 
 function dndCleanup(){
   ghost.style.display='none';
@@ -374,9 +490,7 @@ function dndCleanup(){
   document.querySelectorAll('.ev-bar.dnd-dragging').forEach(b=>b.classList.remove('dnd-dragging'));
   DND.pending=false; DND.active=false;
 }
-
 function dndActivate(){
-  // pending → active: 고스트 표시 + 원본 바 흐리게
   DND.active=true;
   ghost.textContent=DND.title;
   ghost.style.background=DND.color;
@@ -384,21 +498,16 @@ function dndActivate(){
   document.querySelectorAll(`.ev-bar[data-evid="${DND.evId}"]`).forEach(b=>b.classList.add('dnd-dragging'));
 }
 
-// 전역 mousemove
 document.addEventListener('mousemove',e=>{
   if(!DND.pending&&!DND.active)return;
-
-  // pending 상태에서 threshold 초과 시 드래그 활성화
   if(DND.pending&&!DND.active){
     const dx=Math.abs(e.clientX-DND.startX);
     const dy=Math.abs(e.clientY-DND.startY);
-    if(dx>DND_THRESHOLD||dy>DND_THRESHOLD) dndActivate();
+    if(dx>DND_THRESHOLD||dy>DND_THRESHOLD)dndActivate();
     else return;
   }
-
   ghost.style.left=e.clientX+'px';
   ghost.style.top=e.clientY+'px';
-
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
@@ -410,41 +519,30 @@ document.addEventListener('mousemove',e=>{
   }
 });
 
-// 전역 mouseup
 document.addEventListener('mouseup',e=>{
   if(!DND.pending&&!DND.active)return;
-
   if(!DND.active){
-    // threshold 미만 → 클릭으로 처리, openEdit 직접 호출
     const targetId=DND.evId;
     dndCleanup();
     openEdit(targetId);
     return;
   }
-
-  // 실제 드래그 종료
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
   const cell=el?el.closest('.cal-cell'):null;
   const targetDate=cell&&cell.dataset.date?cell.dataset.date:null;
-
-  // 정리 먼저
   const evId=DND.evId;
   const durDays=DND.durDays;
   dndCleanup();
-
   if(!targetDate){toast('이동 취소되었습니다.');return}
-
   const ev=EVTS.find(x=>x.id===evId);
   if(!ev)return;
-
   const newStart=pDate(targetDate);
   const newEnd=new Date(newStart);
   newEnd.setDate(newEnd.getDate()+durDays);
   const ns=fmt(newStart.getFullYear(),newStart.getMonth(),newStart.getDate());
   const ne=fmt(newEnd.getFullYear(),newEnd.getMonth(),newEnd.getDate());
-
   if(ns===ev.start){toast('같은 날짜입니다.');return}
   ev.start=ns; ev.end=ne;
   toast(`"${ev.title}" → ${ns} 이동 완료`);
@@ -529,18 +627,47 @@ function submitPw(){const entered=document.getElementById('pwInput').value;if(en
 
 // ── SETTINGS ──
 let settingsTab='title';
-function openSettings(){document.getElementById('titleInput').value=document.getElementById('logoTitle').textContent;renderMasterCatList();renderMasterSiteList();switchStab('title');document.getElementById('settingsOverlay').classList.add('open');setTimeout(()=>document.getElementById('titleInput').focus(),80)}
+function openSettings(){
+  document.getElementById('titleInput').value=document.getElementById('logoTitle').textContent;
+  // 공지 탭 초기값 세팅
+  const savedNotice=S.get('cal_notice')||'';
+  document.getElementById('noticeInput').value=savedNotice;
+  document.getElementById('noticeCharCount').textContent=savedNotice.length;
+  if(savedNotice.trim()){
+    document.getElementById('noticePreviewWrap').style.display='block';
+    document.getElementById('noticePreviewText').textContent=savedNotice.trim();
+  }else{
+    document.getElementById('noticePreviewWrap').style.display='none';
+  }
+  renderMasterCatList();renderMasterSiteList();switchStab('title');
+  document.getElementById('settingsOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('titleInput').focus(),80);
+}
 function closeSettings(){document.getElementById('settingsOverlay').classList.remove('open');renderAll()}
+
 function applySettings(){
+  // 제목 저장
   const v=document.getElementById('titleInput').value.trim();
   if(v){document.getElementById('logoTitle').textContent=v;document.title=v;S.set('cal_title',v);if(USE_SHEETS)apiSaveTitle(v)}
-  closeSettings();toast('기준정보가 저장되었습니다.');
+
+  // ★ 공지사항 저장
+  const notice=document.getElementById('noticeInput').value.trim();
+  S.set('cal_notice',notice);
+  noticeHiddenByUser=false; // 저장 후 다시 보이게
+  applyNotice(notice);
+  if(USE_SHEETS)apiSaveNotice(notice);
+
+  closeSettings();
+  toast('기준정보가 저장되었습니다.');
 }
+
 function switchStab(tab){
   settingsTab=tab;
-  ['title','cat','site','lock'].forEach(t=>{
-    const btn=document.getElementById('stab-'+t);const panel=document.getElementById('spanel-'+t);
-    if(btn)btn.classList.toggle('active',t===tab);if(panel)panel.classList.toggle('active',t===tab);
+  ['title','notice','cat','site','lock'].forEach(t=>{
+    const btn=document.getElementById('stab-'+t);
+    const panel=document.getElementById('spanel-'+t);
+    if(btn)btn.classList.toggle('active',t===tab);
+    if(panel)panel.classList.toggle('active',t===tab);
   });
   if(tab==='lock')renderLockPanel();
 }
@@ -652,7 +779,7 @@ function saveEvt(){
 }
 function deleteEvt(){if(!editingId)return;EVTS=EVTS.filter(e=>e.id!==editingId);saveEvts();closeModal();renderAll();toast('삭제되었습니다.')}
 
-// ── 드래그로 날짜 범위 선택 (기존) ──
+// ── 드래그로 날짜 범위 선택 ──
 function attachDrag(bodyEl){
   let ds=null,de=null,dragging=false;
   bodyEl.addEventListener('mousedown',e=>{
@@ -747,7 +874,7 @@ function buildGrid(year,month,bodyEl){
         const bar=document.createElement('div');
         bar.className='ev-bar '+(isS&&isE?'span-se':isS?'span-s':isE?'span-e':'span-m');
         bar.style.background=catColor;
-        bar.dataset.evid=e.id;  // DND 추적용
+        bar.dataset.evid=e.id;
 
         if(isS){
           const eSites=toArr(e.sites);
@@ -777,21 +904,17 @@ function buildGrid(year,month,bodyEl){
         if(_tipEnv.length)tipText+=`\n환경: ${_tipEnv.join(', ')}`;
         bar.title=tipText;
 
-        // ── DND 이벤트 바인딩 ──
         bar.addEventListener('mousedown',ev=>{
           if(IS_LOCKED)return;
-          ev.stopPropagation();
-          ev.preventDefault();
-          // pending 상태로 전환 (아직 드래그 시작 아님)
+          ev.stopPropagation();ev.preventDefault();
           const evObj=EVTS.find(x=>x.id===e.id);
           if(!evObj)return;
-          DND.pending=true; DND.active=false;
-          DND.evId=e.id; DND.color=catColor; DND.title=e.title;
+          DND.pending=true;DND.active=false;
+          DND.evId=e.id;DND.color=catColor;DND.title=e.title;
           DND.durDays=Math.round((pDate(evObj.end)-pDate(evObj.start))/86400000);
           DND.overCell=null;
-          DND.startX=ev.clientX; DND.startY=ev.clientY;
+          DND.startX=ev.clientX;DND.startY=ev.clientY;
         });
-        // click 이벤트는 mouseup에서 처리하므로 여기서는 전파만 막음
         bar.addEventListener('click',ev=>{ev.stopPropagation()});
 
         evWrap.appendChild(bar);
@@ -881,6 +1004,9 @@ function renderAll(){renderMini();renderFilterLists();renderMain();document.getE
 
 async function init(){
   const t=S.get('cal_title');if(t){document.getElementById('logoTitle').textContent=t;document.title=t}
+  // ★ 공지 로컬 캐시 복원
+  const cachedNotice=S.get('cal_notice');
+  if(cachedNotice)applyNotice(cachedNotice);
   IS_LOCKED=S.get('cal_locked')==='true';
   if(USE_SHEETS){await loadFromSheets()}else{renderAll()}
   applyLock();
