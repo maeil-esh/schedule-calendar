@@ -363,7 +363,7 @@ async function apiSaveEvts(){return jsonp({action:'saveEvts',data:EVTS})}
 async function apiSaveCats(){return jsonp({action:'saveCats',data:CATS.filter(c=>!c.fixed)})}
 async function apiSaveSites(){return jsonp({action:'saveSites',data:SITES.filter(s=>!s.fixed)})}
 async function apiSaveTitle(v){return jsonp({action:'saveTitle',value:v})}
-async function apiSaveNotice(v){return jsonp({action:'saveNotice',value:v})}  // ★ 공지 API
+async function apiSaveNotice(v){return jsonp({action:'saveNotice',value:v})}
 
 function showLoading(show){
   let el=document.getElementById('loadingBar');
@@ -380,7 +380,6 @@ async function loadFromSheets(){
     if(d.cats&&d.cats.length>0)CATS=[DCATS[0],...normalize(d.cats)];
     if(d.sites&&d.sites.length>0)SITES=[DSITES[0],...normalize(d.sites)];
     if(d.title){document.getElementById('logoTitle').textContent=d.title;document.title=d.title;S.set('cal_title',d.title)}
-    // ★ 공지사항 로드
     if(typeof d.notice!=='undefined'){applyNotice(d.notice);S.set('cal_notice',d.notice)}
     renderAll();
   }catch(err){console.error('Sheets 로드 실패:',err);toast('⚠️ 서버 연결 실패. 잠시 후 새로고침 해주세요.')}
@@ -441,63 +440,45 @@ function applyNotice(text){
   textEl.textContent=trimmed;
   bar.style.display=trimmed?'flex':'none';
 }
-
-// 공지 탭 - 입력 핸들러
 function onNoticeInput(){
   const val=document.getElementById('noticeInput').value;
   document.getElementById('noticeCharCount').textContent=val.length;
   const preview=document.getElementById('noticePreviewWrap');
   const previewText=document.getElementById('noticePreviewText');
-  if(val.trim()){
-    preview.style.display='block';
-    previewText.textContent=val.trim();
-  }else{
-    preview.style.display='none';
-  }
+  if(val.trim()){preview.style.display='block';previewText.textContent=val.trim()}
+  else{preview.style.display='none'}
 }
 function clearNotice(){
   document.getElementById('noticeInput').value='';
   document.getElementById('noticeCharCount').textContent='0';
   document.getElementById('noticePreviewWrap').style.display='none';
 }
-// ══════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════
 // ── DRAG & DROP 엔진 ──
 // ══════════════════════════════════════════════════════════
 const ghost=document.getElementById('dnd-ghost');
-const DND={
-  pending:false,
-  active:false,
-  evId:null,color:'#888',title:'',durDays:0,overCell:null,
-  startX:0,startY:0
-};
+const DND={pending:false,active:false,evId:null,color:'#888',title:'',durDays:0,overCell:null,startX:0,startY:0};
 const DND_THRESHOLD=5;
 
 function dndCleanup(){
   ghost.style.display='none';
   if(DND.overCell){DND.overCell.classList.remove('dnd-over');DND.overCell=null}
   document.querySelectorAll('.ev-bar.dnd-dragging').forEach(b=>b.classList.remove('dnd-dragging'));
-  DND.pending=false; DND.active=false;
+  DND.pending=false;DND.active=false;
 }
 function dndActivate(){
-  DND.active=true;
-  ghost.textContent=DND.title;
-  ghost.style.background=DND.color;
-  ghost.style.display='block';
+  DND.active=true;ghost.textContent=DND.title;ghost.style.background=DND.color;ghost.style.display='block';
   document.querySelectorAll(`.ev-bar[data-evid="${DND.evId}"]`).forEach(b=>b.classList.add('dnd-dragging'));
 }
 
 document.addEventListener('mousemove',e=>{
   if(!DND.pending&&!DND.active)return;
   if(DND.pending&&!DND.active){
-    const dx=Math.abs(e.clientX-DND.startX);
-    const dy=Math.abs(e.clientY-DND.startY);
-    if(dx>DND_THRESHOLD||dy>DND_THRESHOLD)dndActivate();
-    else return;
+    const dx=Math.abs(e.clientX-DND.startX),dy=Math.abs(e.clientY-DND.startY);
+    if(dx>DND_THRESHOLD||dy>DND_THRESHOLD)dndActivate();else return;
   }
-  ghost.style.left=e.clientX+'px';
-  ghost.style.top=e.clientY+'px';
+  ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
@@ -511,42 +492,30 @@ document.addEventListener('mousemove',e=>{
 
 document.addEventListener('mouseup',e=>{
   if(!DND.pending&&!DND.active)return;
-  if(!DND.active){
-    const targetId=DND.evId;
-    dndCleanup();
-    openEdit(targetId);
-    return;
-  }
+  if(!DND.active){const targetId=DND.evId;dndCleanup();openEdit(targetId);return}
   ghost.style.visibility='hidden';
   const el=document.elementFromPoint(e.clientX,e.clientY);
   ghost.style.visibility='visible';
   const cell=el?el.closest('.cal-cell'):null;
   const targetDate=cell&&cell.dataset.date?cell.dataset.date:null;
-  const evId=DND.evId;
-  const durDays=DND.durDays;
+  const evId=DND.evId,durDays=DND.durDays;
   dndCleanup();
   if(!targetDate){toast('이동 취소되었습니다.');return}
-  const ev=EVTS.find(x=>x.id===evId);
-  if(!ev)return;
-  const newStart=pDate(targetDate);
-  const newEnd=new Date(newStart);
+  const ev=EVTS.find(x=>x.id===evId);if(!ev)return;
+  const newStart=pDate(targetDate),newEnd=new Date(newStart);
   newEnd.setDate(newEnd.getDate()+durDays);
   const ns=fmt(newStart.getFullYear(),newStart.getMonth(),newStart.getDate());
   const ne=fmt(newEnd.getFullYear(),newEnd.getMonth(),newEnd.getDate());
   if(ns===ev.start){toast('같은 날짜입니다.');return}
-  ev.start=ns; ev.end=ne;
+  ev.start=ns;ev.end=ne;
   toast(`"${ev.title}" → ${ns} 이동 완료`);
   saveEvts();
 });
-// ══════════════════════════════════════════════════════════
 
 // ── MINI CALENDAR ──
 function renderMini(){
   const evDates=new Set(EVTS.flatMap(e=>{const ds=[];let d=pDate(e.start);const en=pDate(e.end);while(d<=en){ds.push(fmt(d.getFullYear(),d.getMonth(),d.getDate()));d.setDate(d.getDate()+1)}return ds}));
-  const first=new Date(miniY,miniM,1).getDay();
-  const dim=new Date(miniY,miniM+1,0).getDate();
-  const dimp=new Date(miniY,miniM,0).getDate();
-  const ts=todayStr();
+  const first=new Date(miniY,miniM,1).getDay(),dim=new Date(miniY,miniM+1,0).getDate(),dimp=new Date(miniY,miniM,0).getDate(),ts=todayStr();
   let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:13px;font-weight:600">
     <button onclick="miniPrev()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px 6px;border-radius:4px">‹</button>
     <span>${miniY}.${String(miniM+1).padStart(2,'0')}</span>
@@ -609,26 +578,42 @@ function renderSiteList(){
   });
 }
 
+// ══════════════════════════════════════════════════════════
+// ★ 수정 1/2 : 비밀번호 → SHA-256 해시 방식으로 변경
+//
+// 비번 변경 방법:
+//   브라우저 F12 콘솔에서 아래 실행 후 출력값으로 교체
+//   crypto.subtle.digest('SHA-256',new TextEncoder().encode('새비밀번호')).then(b=>console.log(Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')))
+// ══════════════════════════════════════════════════════════
+const ADMIN_PW_HASH='cc5809dff78e63857870bc023279acdf3c9caf862abea3345492d6d9bf8c9527';
+
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// ══════════════════════════════════════════════════════════
+
 // ── 비밀번호 ──
-const ADMIN_PW='1234';
 function checkPassword(){document.getElementById('pwInput').value='';document.getElementById('pwError').style.display='none';document.getElementById('pwOverlay').classList.add('open');setTimeout(()=>document.getElementById('pwInput').focus(),80)}
 function closePw(){document.getElementById('pwOverlay').classList.remove('open')}
-function submitPw(){const entered=document.getElementById('pwInput').value;if(entered===ADMIN_PW){closePw();openSettings()}else{document.getElementById('pwError').style.display='block';document.getElementById('pwInput').value='';document.getElementById('pwInput').focus()}}
+
+// ★ 수정 2/2 : submitPw를 async + 해시 비교로 교체
+async function submitPw(){
+  const entered=document.getElementById('pwInput').value;
+  const enteredHash=await sha256(entered);
+  if(enteredHash===ADMIN_PW_HASH){closePw();openSettings()}
+  else{document.getElementById('pwError').style.display='block';document.getElementById('pwInput').value='';document.getElementById('pwInput').focus()}
+}
 
 // ── SETTINGS ──
 let settingsTab='title';
 function openSettings(){
   document.getElementById('titleInput').value=document.getElementById('logoTitle').textContent;
-  // 공지 탭 초기값 세팅
   const savedNotice=S.get('cal_notice')||'';
   document.getElementById('noticeInput').value=savedNotice;
   document.getElementById('noticeCharCount').textContent=savedNotice.length;
-  if(savedNotice.trim()){
-    document.getElementById('noticePreviewWrap').style.display='block';
-    document.getElementById('noticePreviewText').textContent=savedNotice.trim();
-  }else{
-    document.getElementById('noticePreviewWrap').style.display='none';
-  }
+  if(savedNotice.trim()){document.getElementById('noticePreviewWrap').style.display='block';document.getElementById('noticePreviewText').textContent=savedNotice.trim()}
+  else{document.getElementById('noticePreviewWrap').style.display='none'}
   renderMasterCatList();renderMasterSiteList();switchStab('title');
   document.getElementById('settingsOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('titleInput').focus(),80);
@@ -636,18 +621,12 @@ function openSettings(){
 function closeSettings(){document.getElementById('settingsOverlay').classList.remove('open');renderAll()}
 
 function applySettings(){
-  // 제목 저장
   const v=document.getElementById('titleInput').value.trim();
   if(v){document.getElementById('logoTitle').textContent=v;document.title=v;S.set('cal_title',v);if(USE_SHEETS)apiSaveTitle(v)}
-
-  // ★ 공지사항 저장
   const notice=document.getElementById('noticeInput').value.trim();
-  S.set('cal_notice',notice);
-  applyNotice(notice);
+  S.set('cal_notice',notice);applyNotice(notice);
   if(USE_SHEETS)apiSaveNotice(notice);
-
-  closeSettings();
-  toast('기준정보가 저장되었습니다.');
+  closeSettings();toast('기준정보가 저장되었습니다.');
 }
 
 function switchStab(tab){
@@ -755,7 +734,7 @@ function overlayBg(e){if(e.target===document.getElementById('overlay'))closeModa
 function parseAuditors(str,max){if(!str||!str.trim())return[];return str.split(',').map(s=>s.trim()).filter(Boolean).slice(0,max)}
 function saveEvt(){
   const title=document.getElementById('fEvtTitle').value.trim();
-  const start=document.getElementById('fStart').value;const end=document.getElementById('fEnd').value;
+  const start=document.getElementById('fStart').value,end=document.getElementById('fEnd').value;
   const note=document.getElementById('fNote').value.trim();
   const auditorEnv=parseAuditors(document.getElementById('fAuditorEnv').value,4);
   const auditorSafe=parseAuditors(document.getElementById('fAuditorSafe').value,4);
@@ -805,13 +784,9 @@ function getFiltered(){
 
 // ── BUILD CALENDAR GRID ──
 function buildGrid(year,month,bodyEl){
-  const first=new Date(year,month,1).getDay();
-  const dim=new Date(year,month+1,0).getDate();
-  const dimp=new Date(year,month,0).getDate();
-  const ts=todayStr();
+  const first=new Date(year,month,1).getDay(),dim=new Date(year,month+1,0).getDate(),dimp=new Date(year,month,0).getDate(),ts=todayStr();
   const filtered=getFiltered();
   const weeks=Math.ceil((first+dim)/7);
-
   for(let row=0;row<weeks;row++){
     const wCells=[];
     for(let col=0;col<7;col++){
@@ -824,7 +799,6 @@ function buildGrid(year,month,bodyEl){
     const wS=pDate(wCells[0].ds),wE=pDate(wCells[6].ds);
     const wEvts=filtered.filter(e=>{const s=pDate(e.start),en=pDate(e.end);return s<=wE&&en>=wS})
       .sort((a,b)=>(pDate(b.end)-pDate(b.start))-(pDate(a.end)-pDate(a.start)));
-
     const slots={},evtSlot={};
     wEvts.forEach(e=>{
       const s=pDate(e.start),en=pDate(e.end);
@@ -835,21 +809,17 @@ function buildGrid(year,month,bodyEl){
       evtSlot[e.id]={slot,sc,ec};
       for(let c=sc;c<=ec;c++){if(!slots[c])slots[c]=[];slots[c][slot]=e.id}
     });
-
     const frag=document.createDocumentFragment();
     wCells.forEach(({y,m,d,ds,other,col})=>{
-      const dow=new Date(y,m,d).getDay();
-      const isHol=!!HOL[ds];
+      const dow=new Date(y,m,d).getDay(),isHol=!!HOL[ds];
       const cell=document.createElement('div');
       cell.className='cal-cell'+(other?' other-month':'')+(ds===ts?' is-today':'')+(dow===0||isHol?' is-sun':dow===6?' is-sat':'');
       cell.dataset.date=ds;
-
       const top=document.createElement('div');top.className='cell-top';
       const de2=document.createElement('div');de2.className='cell-date';de2.textContent=d;
       top.appendChild(de2);
       if(isHol){const hl=document.createElement('div');hl.className='cell-holiday';hl.textContent=HOL[ds];top.appendChild(hl)}
       cell.appendChild(top);
-
       const evWrap=document.createElement('div');evWrap.className='cell-events';
       const colEvts=wEvts.filter(e=>{const{sc,ec}=evtSlot[e.id];return col>=sc&&col<=ec}).sort((a,b)=>evtSlot[a.id].slot-evtSlot[b.id].slot);
       let lastSlot=-1;
@@ -862,9 +832,7 @@ function buildGrid(year,month,bodyEl){
         const isS=col===sc,isE=col===ec;
         const bar=document.createElement('div');
         bar.className='ev-bar '+(isS&&isE?'span-se':isS?'span-s':isE?'span-e':'span-m');
-        bar.style.background=catColor;
-        bar.dataset.evid=e.id;
-
+        bar.style.background=catColor;bar.dataset.evid=e.id;
         if(isS){
           const eSites=toArr(e.sites);
           const firstSite=SITES.find(s=>eSites.includes(s.id)&&!s.fixed);
@@ -877,7 +845,7 @@ function buildGrid(year,month,bodyEl){
           titleSpan.textContent=e.title;
           titleSpan.style.cssText='overflow:hidden;text-overflow:ellipsis;flex-shrink:1';
           bar.appendChild(titleSpan);
-          const _safe=toArr(e.auditorSafe);const _env=toArr(e.auditorEnv);
+          const _safe=toArr(e.auditorSafe),_env=toArr(e.auditorEnv);
           if(_safe.length||_env.length){
             const audSpan=document.createElement('span');
             audSpan.style.cssText='font-size:9px;opacity:.85;white-space:nowrap;flex-shrink:0;margin-left:4px;background:rgba(0,0,0,.18);border-radius:3px;padding:1px 4px';
@@ -885,27 +853,22 @@ function buildGrid(year,month,bodyEl){
             audSpan.textContent=parts.join(' / ');bar.appendChild(audSpan);
           }
         }
-
-        const _tipSafe=toArr(e.auditorSafe);const _tipEnv=toArr(e.auditorEnv);
+        const _tipSafe=toArr(e.auditorSafe),_tipEnv=toArr(e.auditorEnv);
         let tipText=e.title;
         if(toArr(e.sites).length)tipText+=` [${toArr(e.sites).map(sid=>SITES.find(s=>s.id===sid)?.label||sid).join(', ')}]`;
         if(_tipSafe.length)tipText+=`\n안전: ${_tipSafe.join(', ')}`;
         if(_tipEnv.length)tipText+=`\n환경: ${_tipEnv.join(', ')}`;
         bar.title=tipText;
-
         bar.addEventListener('mousedown',ev=>{
           if(IS_LOCKED)return;
           ev.stopPropagation();ev.preventDefault();
-          const evObj=EVTS.find(x=>x.id===e.id);
-          if(!evObj)return;
+          const evObj=EVTS.find(x=>x.id===e.id);if(!evObj)return;
           DND.pending=true;DND.active=false;
           DND.evId=e.id;DND.color=catColor;DND.title=e.title;
           DND.durDays=Math.round((pDate(evObj.end)-pDate(evObj.start))/86400000);
-          DND.overCell=null;
-          DND.startX=ev.clientX;DND.startY=ev.clientY;
+          DND.overCell=null;DND.startX=ev.clientX;DND.startY=ev.clientY;
         });
         bar.addEventListener('click',ev=>{ev.stopPropagation()});
-
         evWrap.appendChild(bar);
       });
       cell.appendChild(evWrap);
@@ -993,9 +956,7 @@ function renderAll(){renderMini();renderFilterLists();renderMain();document.getE
 
 async function init(){
   const t=S.get('cal_title');if(t){document.getElementById('logoTitle').textContent=t;document.title=t}
-  // ★ 공지 로컬 캐시 복원
-  const cachedNotice=S.get('cal_notice');
-  if(cachedNotice)applyNotice(cachedNotice);
+  const cachedNotice=S.get('cal_notice');if(cachedNotice)applyNotice(cachedNotice);
   IS_LOCKED=S.get('cal_locked')==='true';
   if(USE_SHEETS){await loadFromSheets()}else{renderAll()}
   applyLock();
