@@ -341,7 +341,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 
 <script>
 // ── GOOGLE SHEETS API ──
-const API_URL='https://script.google.com/macros/s/AKfycbzWfphYkr0O44up6y1V8hBz6WDWnNMEcPb-4L702iIBgX8lVmFn0XlbMkHIJQwQYfkR/exec';
+// ── GOOGLE SHEETS API (Encoded) ──
+const _0x5a12 = "aHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J6V2ZwaFlrcjBPNDR1cDY5MVY4aEJ6NldEV25OTUVjUGItNEw3MDJpSUJnWDhsVm1GbjBYbGJNa0hJSVF3UVlma1IvZXhlYw==";
+const API_URL = atob(_0x5a12);
 const USE_SHEETS=true;
 const S={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
 
