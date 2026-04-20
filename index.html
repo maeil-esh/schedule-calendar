@@ -347,7 +347,7 @@ const API_URL = atob(_0x5a12);
 const USE_SHEETS=true;
 const S={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
 
-function jsonp(params){
+function jsonp(params, retryCount=0){
   return new Promise((resolve,reject)=>{
     const cbName='_j'+Date.now()+Math.random().toString(36).slice(2,5);
     const script=document.createElement('script');
@@ -356,7 +356,15 @@ function jsonp(params){
     params.callback=cbName;
     const qs=Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(typeof v==='object'?JSON.stringify(v):String(v))).join('&');
     script.src=API_URL+'?'+qs;
-    script.onerror=()=>{clearTimeout(timeout);delete window[cbName];reject(new Error('error'))};
+    script.onerror=()=>{
+      clearTimeout(timeout);delete window[cbName];if(script.parentNode)script.parentNode.removeChild(script);
+      if(retryCount<2){
+        // 콜드 스타트 대응: 1.5초 후 자동 재시도 (최대 2회)
+        setTimeout(()=>jsonp(params,retryCount+1).then(resolve).catch(reject),1500);
+      }else{
+        reject(new Error('error'));
+      }
+    };
     document.body.appendChild(script);
   });
 }
